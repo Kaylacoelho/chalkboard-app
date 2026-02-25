@@ -409,19 +409,16 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
     ...finished.sort((a, b) => new Date(b.start_time) - new Date(a.start_time)),
   ];
 
-  // Group games by date label e.g. "Today", "Yesterday"
-  // reduce() builds an object where each key is a date label
-  // and each value is an array of games for that day
+  // Build date labels for grouping
+  const today = new Date();
+  const yesterday = new Date();
+  const tomorrow = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  tomorrow.setDate(today.getDate() + 1);
+
+  // reduce() builds { "Today": [...games], "Yesterday": [...games], ... }
   const grouped = sorted.reduce((acc, game) => {
     const gameDate = new Date(game.start_time);
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-
-    // Compare just the date part (not time) using toDateString()
-const tomorrow = new Date();
-tomorrow.setDate(today.getDate() + 1);
-
     let label;
     if (gameDate.toDateString() === today.toDateString()) label = "Today";
     else if (gameDate.toDateString() === yesterday.toDateString()) label = "Yesterday";
@@ -433,9 +430,13 @@ tomorrow.setDate(today.getDate() + 1);
     return acc;
   }, {});
 
-  // Show Today first, then Yesterday, then anything else
-  const order = ["Today", "Tomorrow", "Yesterday"];  // Check if there are any games today
-  
+  // Always show Today → Tomorrow → Yesterday, then anything else
+  const order = ["Today", "Tomorrow", "Yesterday"];
+  const sortedLabels = [
+    ...order.filter(l => grouped[l]),
+    ...Object.keys(grouped).filter(l => !order.includes(l)),
+  ];
+
   const hasGamesToday = grouped["Today"]?.length > 0;
 
   return (
@@ -447,7 +448,7 @@ tomorrow.setDate(today.getDate() + 1);
         scoreHistory={scoreHistory}
       />
 
-      {/* If no games today, show a friendly message */}
+      {/* If no games today, show friendly placeholder */}
       {!hasGamesToday && (
         <div className="flex items-center gap-3 mb-6">
           <span className="text-xs font-bold tracking-widest uppercase text-indigo-500">
