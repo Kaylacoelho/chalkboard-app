@@ -409,14 +409,12 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
     ...finished.sort((a, b) => new Date(b.start_time) - new Date(a.start_time)),
   ];
 
-  // Build date labels for grouping
   const today = new Date();
   const yesterday = new Date();
   const tomorrow = new Date();
   yesterday.setDate(today.getDate() - 1);
   tomorrow.setDate(today.getDate() + 1);
 
-  // reduce() builds { "Today": [...games], "Yesterday": [...games], ... }
   const grouped = sorted.reduce((acc, game) => {
     const gameDate = new Date(game.start_time);
     let label;
@@ -430,7 +428,6 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
     return acc;
   }, {});
 
-  // Always show Today → Tomorrow → Yesterday, then anything else
   const order = ["Today", "Tomorrow", "Yesterday"];
   const sortedLabels = [
     ...order.filter(l => grouped[l]),
@@ -438,6 +435,16 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
   ];
 
   const hasGamesToday = grouped["Today"]?.length > 0;
+
+  const nextDateWithGames = Object.keys(grouped)
+    .filter(label => label !== "Today" && label !== "Yesterday")
+    .sort((a, b) => {
+      const toDate = (label) => {
+        if (label === "Tomorrow") return tomorrow;
+        return new Date(label);
+      };
+      return toDate(a) - toDate(b);
+    })[0];
 
   return (
     <div>
@@ -448,14 +455,20 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
         scoreHistory={scoreHistory}
       />
 
-      {/* If no games today, show friendly placeholder */}
       {!hasGamesToday && (
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-xs font-bold tracking-widest uppercase text-indigo-500">
-            Today
-          </span>
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-xs text-gray-400 italic">No games today</span>
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-xs font-bold tracking-widest uppercase text-indigo-500">
+              Today
+            </span>
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400 italic">No games today</span>
+          </div>
+          {nextDateWithGames && (
+            <div className="text-xs text-gray-400 text-center py-2">
+              Next games: <span className="font-semibold text-gray-600">{nextDateWithGames}</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -485,7 +498,6 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
     </div>
   );
 }
-
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
