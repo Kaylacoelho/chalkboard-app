@@ -431,10 +431,8 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
 
   // Show Today first, then Yesterday, then anything else
   const order = ["Today", "Yesterday"];
-  const sortedLabels = [
-    ...order.filter(l => grouped[l]),
-    ...Object.keys(grouped).filter(l => !order.includes(l)),
-  ];
+  // Check if there are any games today
+  const hasGamesToday = grouped["Today"]?.length > 0;
 
   return (
     <div>
@@ -444,9 +442,20 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
         onToggleFavorite={onToggleFavorite}
         scoreHistory={scoreHistory}
       />
+
+      {/* If no games today, show a friendly message */}
+      {!hasGamesToday && (
+        <div className="flex items-center gap-3 mb-6">
+          <span className="text-xs font-bold tracking-widest uppercase text-indigo-500">
+            Today
+          </span>
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400 italic">No games today</span>
+        </div>
+      )}
+
       {sortedLabels.map(label => (
         <div key={label} className="mb-6">
-          {/* Date section header */}
           <div className="flex items-center gap-3 mb-3">
             <span className={`text-xs font-bold tracking-widest uppercase
               ${label === "Today" ? "text-indigo-500" : "text-gray-400"}`}>
