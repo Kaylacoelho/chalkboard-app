@@ -345,12 +345,17 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
   ];
 
   const today = new Date();
-  const grouped = games.reduce((acc, game) => {
+  const yesterday = new Date();
+  const tomorrow = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  tomorrow.setDate(today.getDate() + 1);
+
+  const grouped = sorted.reduce((acc, game) => {
     const gameDate = new Date(game.start_time);
     let label;
     if (gameDate.toDateString() === today.toDateString()) label = "Today";
-    else if (gameDate.toDateString() === new Date(today.getTime() - 86400000).toDateString()) label = "Yesterday";
-    else if (gameDate.toDateString() === new Date(today.getTime() + 86400000).toDateString()) label = "Tomorrow";
+    else if (gameDate.toDateString() === yesterday.toDateString()) label = "Yesterday";
+    else if (gameDate.toDateString() === tomorrow.toDateString()) label = "Tomorrow";
     else label = gameDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
     if (!acc[label]) acc[label] = [];
@@ -358,39 +363,71 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
     return acc;
   }, {});
 
-  const sortedLabels = Object.keys(grouped).sort((a, b) => {
-    const parseLabel = (label) =>
-      label === "Today" ? today
-      : label === "Yesterday" ? new Date(today.getTime() - 86400000)
-      : label === "Tomorrow" ? new Date(today.getTime() + 86400000)
-      : new Date(`${label} ${today.getFullYear()}`);
-    return parseLabel(a) - parseLabel(b);
-  });
+  const order = ["Today", "Tomorrow", "Yesterday"];
+  const sortedLabels = [
+    ...order.filter(l => grouped[l]),
+    ...Object.keys(grouped).filter(l => !order.includes(l)),
+  ];
 
   const hasGamesToday = grouped["Today"]?.length > 0;
-  const nextDateWithGames = getNextDateWithGames(games, today);
+
+  const nextDateWithGames = Object.keys(grouped)
+    .filter(label => label !== "Today" && label !== "Yesterday")
+    .sort((a, b) => {
+      const toDate = (label) => {
+        if (label === "Tomorrow") return tomorrow;
+        return new Date(label);
+      };
+      return toDate(a) - toDate(b);
+    })[0];
 
   return (
     <div>
-      <FavoritesSection games={sorted} favoriteIds={favoriteIds} onToggleFavorite={onToggleFavorite} scoreHistory={scoreHistory} />
+      <FavoritesSection
+        games={sorted}
+        favoriteIds={favoriteIds}
+        onToggleFavorite={onToggleFavorite}
+        scoreHistory={scoreHistory}
+      />
 
       {!hasGamesToday && (
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-3">
-            <span className="text-xs text-gray-400 font-semibold uppercase">Next Games: {nextDateWithGames}</span>
+            <span className="text-xs font-bold tracking-widest uppercase text-indigo-500">
+              Today
+            </span>
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400 italic">No games today</span>
           </div>
-          {grouped[nextDateWithGames]?.map(g => (
-            <GameCard key={g.id} game={g} isFavorited={favoriteIds.has(g.id)} onToggleFavorite={onToggleFavorite} scoreHistory={scoreHistory} />
-          ))}
+          {nextDateWithGames && (
+            <div className="text-xs text-gray-400 text-center py-2">
+              Next games: <span className="font-semibold text-gray-600">{nextDateWithGames}</span>
+            </div>
+          )}
         </div>
       )}
 
       {sortedLabels.map(label => (
         <div key={label} className="mb-6">
-          {label !== "Today" && <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">{label}</div>}
-          {grouped[label].map(g => (
-            <GameCard key={g.id} game={g} isFavorited={favoriteIds.has(g.id)} onToggleFavorite={onToggleFavorite} scoreHistory={scoreHistory} />
-          ))}
+          <div className="flex items-center gap-3 mb-3">
+            <span className={`text-xs font-bold tracking-widest uppercase
+              ${label === "Today" ? "text-indigo-500" : "text-gray-400"}`}>
+              {label}
+            </span>
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400">{grouped[label].length} games</span>
+          </div>
+          {grouped[label]
+            .filter(g => !favoriteIds.has(g.id))
+            .map(g => (
+              <GameCard
+                key={g.id}
+                game={g}
+                isFavorited={false}
+                onToggleFavorite={onToggleFavorite}
+                scoreHistory={scoreHistory}
+              />
+            ))}
         </div>
       ))}
     </div>
