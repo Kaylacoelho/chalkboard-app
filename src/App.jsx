@@ -244,6 +244,7 @@ function BestBetCard({ bestBet }) {
 }
 
 // ─── GameCard (updated with features 2, 3, 4, 5) ─────────────────────────────
+
 function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
   const { home, away, teams, score, status, start_time, win_probability, spread } = game;
   const homeTeam = teams[home];
@@ -251,108 +252,124 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
   const isScheduled = status === "scheduled";
   const isLive = status === "in_progress";
   const isFinal = status === "final" || status === "closed";
-
-  // Feature 2: check if this game qualifies as an upset alert
   const showUpsetAlert = isScheduled && isUpsetAlert(win_probability, home, away);
-
-  // Feature 5: which team (if any) is currently on a run?
   const onARun = isLive ? getMomentum(scoreHistory, game.id, home, away) : null;
 
+  // Who won? Highlight the winner's name in green for finished games
+  const homeScore = score?.[home] ?? 0;
+  const awayScore = score?.[away] ?? 0;
+  const homeWon = isFinal && homeScore > awayScore;
+  const awayWon = isFinal && awayScore > homeScore;
+
   return (
-    <div className={`bg-white border rounded-xl px-5 py-4 mb-2.5 shadow-sm transition-shadow
-      ${isLive ? "border-red-200 ring-2 ring-red-200" : "border-gray-200"}
-      ${isFavorited ? "border-l-4 border-l-indigo-400" : ""}`}>
+    <div className={`bg-white rounded-2xl mb-3 overflow-hidden transition-all
+      ${isLive
+        ? "shadow-md ring-2 ring-red-400/40"
+        : isFavorited
+        ? "shadow-sm ring-2 ring-indigo-300/60"
+        : "shadow-sm hover:shadow-md border border-gray-100"}`}>
 
-      {/* Status row */}
-      <div className="flex justify-between items-center mb-3">
-        <div className="flex items-center gap-2">
-          {isLive ? <LiveBadge /> : (
-            <span className={`text-xs font-semibold tracking-wide uppercase
-              ${isFinal ? "text-gray-400" : "text-indigo-500"}`}>
-              {isFinal ? "Final" : "Upcoming"}
-            </span>
-          )}
-          {/* Feature 2: Upset Alert badge */}
-          {showUpsetAlert && (
-            <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">
-              ⚡ Upset Alert
-            </span>
-          )}
-        </div>
+      {/* Colored top stripe for live games */}
+      {isLive && <div className="h-1 bg-gradient-to-r from-red-400 to-orange-400" />}
+      {isFavorited && !isLive && <div className="h-1 bg-gradient-to-r from-indigo-400 to-violet-400" />}
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">{formatTime(start_time)}</span>
-          {/* Feature 3: Favorite star button
-              onClick stops the event from bubbling up to parent elements.
-              e.stopPropagation() means "don't let this click trigger other handlers." */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleFavorite(game.id, home, away); }}
-            className={`text-base leading-none transition-colors
-              ${isFavorited ? "text-yellow-400" : "text-gray-200 hover:text-yellow-300"}`}
-            title={isFavorited ? "Remove from favorites" : "Add to favorites"}
-          >
-            ★
-          </button>
-        </div>
-      </div>
-
-      {/* Teams + score */}
-      <div className="flex items-center justify-between">
-        <div className="flex-1 flex items-center gap-2">
-          {awayTeam?.logo && <img src={awayTeam.logo} alt={awayTeam.name} className="w-7 h-7 object-contain" />}
-          <div>
-            <div className="font-semibold text-sm">{awayTeam?.name ?? away}</div>
-            <div className="text-xs text-gray-400">Away</div>
+      <div className="px-5 py-4">
+        {/* Status row */}
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2">
+            {isLive ? <LiveBadge /> : (
+              <span className={`text-xs font-semibold tracking-wide uppercase
+                ${isFinal ? "text-gray-400" : "text-indigo-500"}`}>
+                {isFinal ? "Final" : "Upcoming"}
+              </span>
+            )}
+            {showUpsetAlert && (
+              <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">
+                ⚡ Upset Alert
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">{formatTime(start_time)}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(game.id); }}
+              className={`text-lg leading-none transition-all
+                ${isFavorited ? "text-yellow-400 scale-110" : "text-gray-200 hover:text-yellow-300"}`}
+            >★</button>
           </div>
         </div>
 
-        <div className="text-center min-w-[80px]">
-          {!isScheduled ? (
-            <div className="font-extrabold text-2xl tracking-tight font-mono tabular-nums">
-              {score?.[away]} – {score?.[home]}
+        {/* Teams */}
+        <div className="flex items-center gap-3">
+          {/* Away team */}
+          <div className="flex-1 flex items-center gap-3">
+            {awayTeam?.logo
+              ? <img src={awayTeam.logo} alt="" className="w-10 h-10 object-contain" />
+              : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{away}</div>
+            }
+            <div>
+              <div className={`font-bold text-sm leading-tight
+                ${awayWon ? "text-green-600" : isFinal && !awayWon ? "text-gray-400" : "text-gray-900"}`}>
+                {awayTeam?.name ?? away}
+              </div>
+              <div className="text-xs text-gray-400">Away</div>
             </div>
-          ) : (
-            <div className="font-bold text-sm text-gray-300">vs</div>
-          )}
-        </div>
-
-        <div className="flex-1 flex items-center justify-end gap-2 text-right">
-          <div>
-            <div className="font-semibold text-sm">{homeTeam?.name ?? home}</div>
-            <div className="text-xs text-gray-400">Home</div>
           </div>
-          {homeTeam?.logo && <img src={homeTeam.logo} alt={homeTeam.name} className="w-7 h-7 object-contain" />}
+
+          {/* Score / VS */}
+          <div className="text-center px-2">
+            {!isScheduled ? (
+              <div className="font-black text-2xl tracking-tight font-mono tabular-nums text-gray-900">
+                {score?.[away]} <span className="text-gray-300">–</span> {score?.[home]}
+              </div>
+            ) : (
+              <div className="text-sm font-bold text-gray-300">vs</div>
+            )}
+            {onARun && (
+              <div className="text-xs font-semibold text-orange-500 mt-1">
+                🔥 {teams[onARun]?.name ?? onARun} on a run
+              </div>
+            )}
+          </div>
+
+          {/* Home team */}
+          <div className="flex-1 flex items-center justify-end gap-3 text-right">
+            <div>
+              <div className={`font-bold text-sm leading-tight
+                ${homeWon ? "text-green-600" : isFinal && !homeWon ? "text-gray-400" : "text-gray-900"}`}>
+                {homeTeam?.name ?? home}
+              </div>
+              <div className="text-xs text-gray-400">Home</div>
+            </div>
+            {homeTeam?.logo
+              ? <img src={homeTeam.logo} alt="" className="w-10 h-10 object-contain" />
+              : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{home}</div>
+            }
+          </div>
         </div>
+
+        {/* Prob bar */}
+        {win_probability && (isLive || isScheduled) && (
+          <ProbBar
+            home={win_probability[home]} homeAbbr={home}
+            away={win_probability[away]} awayAbbr={away}
+            draw={win_probability.draw}
+          />
+        )}
+
+        {/* Spread */}
+        {isScheduled && spread && (
+          <div className="mt-3 pt-3 border-t border-gray-50 flex gap-4 text-xs text-gray-400">
+            <span>📈 <span className="font-medium text-gray-600">{spread.favorite}</span></span>
+            {spread.overUnder && <span>O/U <span className="font-medium text-gray-600">{spread.overUnder}</span></span>}
+          </div>
+        )}
+
+        {/* Score timeline */}
+        {isLive && scoreHistory[game.id]?.length > 1 && (
+          <ScoreTimeline history={scoreHistory[game.id]} homeAbbr={home} awayAbbr={away} />
+        )}
       </div>
-
-      {/* Feature 5: Momentum indicator
-          Only shows during live games when one team is scoring consecutively */}
-      {onARun && (
-        <div className="mt-2 text-xs font-semibold text-orange-500">
-          🔥 {teams[onARun]?.name ?? onARun} is on a run!
-        </div>
-      )}
-
-      {win_probability && (isLive || isScheduled) && (
-        <ProbBar
-          home={win_probability[home]}
-          homeAbbr={home}
-          away={win_probability[away]}
-          awayAbbr={away}
-          draw={win_probability.draw}
-        />
-      )}
-
-      {isScheduled && <SpreadBadge spread={spread} />}
-
-      {/* Feature 4: Score timeline — only for live games with history */}
-      {isLive && scoreHistory[game.id]?.length > 1 && (
-        <ScoreTimeline
-          history={scoreHistory[game.id]}
-          homeAbbr={home}
-          awayAbbr={away}
-        />
-      )}
     </div>
   );
 }
@@ -389,30 +406,67 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
   const sorted = [
     ...live,
     ...upcoming.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)),
-    ...finished,
+    ...finished.sort((a, b) => new Date(b.start_time) - new Date(a.start_time)),
+  ];
+
+  // Group games by date label e.g. "Today", "Yesterday"
+  // reduce() builds an object where each key is a date label
+  // and each value is an array of games for that day
+  const grouped = sorted.reduce((acc, game) => {
+    const gameDate = new Date(game.start_time);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    // Compare just the date part (not time) using toDateString()
+    let label;
+    if (gameDate.toDateString() === today.toDateString()) label = "Today";
+    else if (gameDate.toDateString() === yesterday.toDateString()) label = "Yesterday";
+    else label = gameDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+    if (!acc[label]) acc[label] = [];
+    acc[label].push(game);
+    return acc;
+  }, {});
+
+  // Show Today first, then Yesterday, then anything else
+  const order = ["Today", "Yesterday"];
+  const sortedLabels = [
+    ...order.filter(l => grouped[l]),
+    ...Object.keys(grouped).filter(l => !order.includes(l)),
   ];
 
   return (
     <div>
-      {/* Favorites pinned at top */}
       <FavoritesSection
         games={sorted}
         favoriteIds={favoriteIds}
         onToggleFavorite={onToggleFavorite}
         scoreHistory={scoreHistory}
       />
-      {/* All games */}
-      {sorted.map(g => (
-        // Don't render a duplicate card if it's already shown in favorites
-        !favoriteIds.has(g.id) && (
-          <GameCard
-            key={g.id}
-            game={g}
-            isFavorited={false}
-            onToggleFavorite={onToggleFavorite}
-            scoreHistory={scoreHistory}
-          />
-        )
+      {sortedLabels.map(label => (
+        <div key={label} className="mb-6">
+          {/* Date section header */}
+          <div className="flex items-center gap-3 mb-3">
+            <span className={`text-xs font-bold tracking-widest uppercase
+              ${label === "Today" ? "text-indigo-500" : "text-gray-400"}`}>
+              {label}
+            </span>
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400">{grouped[label].length} games</span>
+          </div>
+          {grouped[label]
+            .filter(g => !favoriteIds.has(g.id))
+            .map(g => (
+              <GameCard
+                key={g.id}
+                game={g}
+                isFavorited={false}
+                onToggleFavorite={onToggleFavorite}
+                scoreHistory={scoreHistory}
+              />
+            ))}
+        </div>
       ))}
     </div>
   );
