@@ -419,9 +419,13 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
     yesterday.setDate(today.getDate() - 1);
 
     // Compare just the date part (not time) using toDateString()
+const tomorrow = new Date();
+tomorrow.setDate(today.getDate() + 1);
+
     let label;
     if (gameDate.toDateString() === today.toDateString()) label = "Today";
     else if (gameDate.toDateString() === yesterday.toDateString()) label = "Yesterday";
+    else if (gameDate.toDateString() === tomorrow.toDateString()) label = "Tomorrow";
     else label = gameDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
     if (!acc[label]) acc[label] = [];
@@ -430,8 +434,8 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
   }, {});
 
   // Show Today first, then Yesterday, then anything else
-  const order = ["Today", "Yesterday"];
-  // Check if there are any games today
+  const order = ["Today", "Tomorrow", "Yesterday"];  // Check if there are any games today
+  
   const hasGamesToday = grouped["Today"]?.length > 0;
 
   return (
