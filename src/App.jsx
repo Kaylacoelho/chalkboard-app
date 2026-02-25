@@ -241,7 +241,7 @@ function EventsGrid({ events, home, away, teams }) {
   );
 }
 
-function StatsComparison({ homeStats, awayStats, sport }) {
+function StatsComparison({ homeStats, awayStats, homeAbbr, awayAbbr, sport }) {
   const keys = STAT_DISPLAY[sport] ?? [];
   const rows = keys
     .map(key => {
@@ -252,15 +252,20 @@ function StatsComparison({ homeStats, awayStats, sport }) {
     })
     .filter(Boolean);
   if (rows.length === 0) return null;
+  // Single flat grid — header + all rows share the same column widths, so they stay aligned
+  // Visual order matches the card: AWAY on left, HOME on right
   return (
-    <div className="space-y-2">
-      {rows.map(({ key, label, homeVal, awayVal }) => (
-        <div key={key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-xs">
-          <span className="text-right font-semibold text-gray-700">{homeVal}</span>
-          <span className="text-gray-400 text-center min-w-[56px]">{label}</span>
-          <span className="font-semibold text-gray-700">{awayVal}</span>
-        </div>
-      ))}
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1.5 text-xs">
+      {/* Header row */}
+      <div className="text-right font-semibold text-gray-400 pb-1">{awayAbbr}</div>
+      <div className="min-w-[60px]" />
+      <div className="font-semibold text-gray-400 pb-1">{homeAbbr}</div>
+      {/* Stat rows */}
+      {rows.flatMap(({ key, label, homeVal, awayVal }) => [
+        <div key={`${key}-away`} className="text-right font-semibold text-gray-800">{awayVal}</div>,
+        <div key={`${key}-label`} className="text-gray-400 text-center min-w-[60px]">{label}</div>,
+        <div key={`${key}-home`} className="font-semibold text-gray-800">{homeVal}</div>,
+      ])}
     </div>
   );
 }
@@ -296,14 +301,13 @@ function ExpandedSection({ game }) {
         </div>
       )}
       {hasStats && (
-        <div>
-          <div className="grid grid-cols-[1fr_auto_1fr] mb-2 text-xs font-semibold text-gray-600">
-            <span className="text-right">{home}</span>
-            <span className="min-w-[56px]" />
-            <span>{away}</span>
-          </div>
-          <StatsComparison homeStats={homeStats} awayStats={awayStats} sport={sport} />
-        </div>
+        <StatsComparison
+          homeStats={homeStats}
+          awayStats={awayStats}
+          homeAbbr={home}
+          awayAbbr={away}
+          sport={sport}
+        />
       )}
     </div>
   );
@@ -368,6 +372,7 @@ function BestBetCard({ bestBet }) {
 
 function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultExpanded }) {
   const [expanded, setExpanded] = useState(defaultExpanded ?? false);
+  useEffect(() => { setExpanded(defaultExpanded ?? false); }, [defaultExpanded]);
   const { home, away, teams, score, status, clock, start_time, win_probability, spread } = game;
   const homeTeam = teams[home];
   const awayTeam = teams[away];
