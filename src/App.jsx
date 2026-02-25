@@ -245,7 +245,7 @@ function BestBetCard({ bestBet }) {
 // ─── GameCard (updated with features 2, 3, 4, 5) ─────────────────────────────
 
 function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
-  const { home, away, teams, score, status, start_time, win_probability, spread } = game;
+  const { home, away, teams, score, status, clock, start_time, win_probability, spread } = game;
   const homeTeam = teams[home];
   const awayTeam = teams[away];
   const isScheduled = status === "scheduled";
@@ -281,6 +281,9 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
                 ${isFinal ? "text-gray-400" : "text-indigo-500"}`}>
                 {isFinal ? "Final" : "Upcoming"}
               </span>
+            )}
+            {isLive && clock && (
+              <span className="text-xs font-medium text-gray-500">{clock}</span>
             )}
             {showUpsetAlert && (
               <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">
