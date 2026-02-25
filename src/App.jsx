@@ -612,7 +612,7 @@ export default function App() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 flex items-center justify-between">
         <div>
-          <div className="font-extrabold text-lg tracking-tight">🟫 ChalkBoard</div>
+          <div className="font-extrabold text-lg tracking-tight">ChalkBoard</div>
           <div className="text-xs text-gray-400 mt-0.5">
             {loading && !lastRefresh ? "Loading..." : lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : ""}
           </div>
@@ -633,7 +633,7 @@ export default function App() {
       )}
 
       {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 flex overflow-x-auto px-6">
+      <div className="bg-white border-b border-gray-200 flex overflow-x-auto px-4">
         {LEAGUES.map(l => {
           const liveCount = (allGames[l] ?? []).filter(g => g.status === "in_progress").length;
           const isActive = activeTab === l;
