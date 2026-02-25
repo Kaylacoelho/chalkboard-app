@@ -193,7 +193,7 @@ function SpreadBadge({ spread }) {
 const STAT_DISPLAY = {
   nba: ["fieldGoalPct", "threePointPct", "freeThrowPct", "rebounds", "assists", "turnovers"],
   nfl: ["totalYards", "passingYards", "rushingYards", "firstDowns", "turnovers", "sacks"],
-  nhl: ["shotsOnGoal", "powerPlayGoals", "faceoffsWon", "hits", "blockedShots"],
+  nhl: ["shots", "hits", "blocks", "faceoffWinPct", "powerPlayGoals", "pims"],
   mls: ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
   ucl: ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
 };
@@ -242,7 +242,12 @@ function EventsGrid({ events, home, away, teams }) {
 }
 
 function StatsComparison({ homeStats, awayStats, homeAbbr, awayAbbr, sport }) {
-  const keys = STAT_DISPLAY[sport] ?? [];
+  const configuredKeys = STAT_DISPLAY[sport] ?? [];
+  const availableKeys = Object.keys(homeStats ?? awayStats ?? {});
+  // Use configured keys if at least one matches; otherwise fall back to whatever ESPN returned
+  const keys = configuredKeys.some(k => availableKeys.includes(k))
+    ? configuredKeys
+    : availableKeys.slice(0, 6);
   const rows = keys
     .map(key => {
       const h = homeStats?.[key];
