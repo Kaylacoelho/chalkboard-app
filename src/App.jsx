@@ -212,27 +212,32 @@ function EventsGrid({ events, home, away, teams }) {
   const homeEvents = events.filter(e => e.isHome);
   const awayEvents = events.filter(e => !e.isHome);
   return (
-    <div className="grid grid-cols-2 gap-x-4">
-      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+    <div className="grid grid-cols-2 gap-x-3">
+      {/* Column headers */}
+      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5 text-right">
         {teams[home]?.name ?? home}
       </div>
       <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
         {teams[away]?.name ?? away}
       </div>
+
+      {/* Left column: name → time → icon (icon sits at center seam) */}
       <div className="space-y-1.5">
         {homeEvents.length > 0 ? homeEvents.map((e, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span className="text-base leading-none">{eventIcon(e.type)}</span>
-            <span className="text-gray-400 tabular-nums w-8 shrink-0">{e.clock}</span>
+          <div key={i} className="flex items-center justify-end gap-1.5 text-xs text-gray-600">
             <span className="truncate">{e.player ?? e.type}</span>
+            <span className="text-gray-400 tabular-nums shrink-0">{e.clock}</span>
+            <span className="text-base leading-none shrink-0">{eventIcon(e.type)}</span>
           </div>
-        )) : <span className="text-xs text-gray-300 italic">—</span>}
+        )) : <div className="text-xs text-gray-300 italic text-right">—</div>}
       </div>
+
+      {/* Right column: icon → time → name (icon sits at center seam) */}
       <div className="space-y-1.5">
         {awayEvents.length > 0 ? awayEvents.map((e, i) => (
           <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span className="text-base leading-none">{eventIcon(e.type)}</span>
-            <span className="text-gray-400 tabular-nums w-8 shrink-0">{e.clock}</span>
+            <span className="text-base leading-none shrink-0">{eventIcon(e.type)}</span>
+            <span className="text-gray-400 tabular-nums shrink-0">{e.clock}</span>
             <span className="truncate">{e.player ?? e.type}</span>
           </div>
         )) : <span className="text-xs text-gray-300 italic">—</span>}
