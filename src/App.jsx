@@ -1,3 +1,5 @@
+does this look correct? also what are we using best bet for?
+
 import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -53,10 +55,7 @@ function findBestBet(allGames) {
       const homePct = game.win_probability[game.home] ?? 50;
       const awayPct = game.win_probability[game.away] ?? 50;
       const skew = Math.abs(homePct - awayPct);
-      if (skew > bestSkew) {
-        best = { game, league, favPct: Math.max(homePct, awayPct) };
-        bestSkew = skew;
-      }
+      if (skew > bestSkew) best = { game, league, favPct: Math.max(homePct, awayPct) }, bestSkew = skew;
     }
   }
   return best;
@@ -77,8 +76,6 @@ function getMomentum(scoreHistory, gameId, homeAbbr, awayAbbr) {
   if (awayScored && !homeScored) return awayAbbr;
   return null;
 }
-
-// ─── Components ────────────────────────────────────────────────────────────────
 
 function ScoreTimeline({ history, homeAbbr, awayAbbr }) {
   if (!history || history.length < 2) return null;
@@ -107,21 +104,18 @@ function LiveBadge() {
   );
 }
 
-function ProbBar({ home = 50, homeAbbr, away = 50, awayAbbr, draw }) {
+function ProbBar({ home, homeAbbr, away, awayAbbr, draw }) {
   const showDraw = draw != null;
-  const total = home + away + (draw ?? 0);
-  const homePct = (home / total) * 100;
-  const awayPct = (away / total) * 100;
-  const drawPct = showDraw ? (draw / total) * 100 : 0;
-  const favPct = Math.max(home, away);
-  const favTeam = home >= away ? homeAbbr : awayAbbr;
+  const total = (home ?? 50) + (away ?? 50) + (draw ?? 0);
+  const homePct = (home / total) * 100, awayPct = (away / total) * 100, drawPct = showDraw ? (draw / total) * 100 : 0;
+  const favPct = Math.max(home ?? 0, away ?? 0), favTeam = (home ?? 0) >= (away ?? 0) ? homeAbbr : awayAbbr;
 
   return (
     <div className="mt-3">
       <div className="flex justify-between mb-1 text-xs text-gray-500">
-        <span>{homeAbbr} <strong className={probTextClass(home)}>{home.toFixed(0)}%</strong></span>
-        {showDraw && <span>Draw <strong className={probTextClass(draw)}>{draw.toFixed(0)}%</strong></span>}
-        <span><strong className={probTextClass(away)}>{away.toFixed(0)}%</strong> {awayAbbr}</span>
+        <span>{homeAbbr} <strong className={probTextClass(home)}>{home?.toFixed(0)}%</strong></span>
+        {showDraw && <span>Draw <strong className={probTextClass(draw)}>{draw?.toFixed(0)}%</strong></span>}
+        <span><strong className={probTextClass(away)}>{away?.toFixed(0)}%</strong> {awayAbbr}</span>
       </div>
       <div className="flex h-1.5 rounded-full overflow-hidden bg-gray-100">
         <div className={`${probBgClass(home)} transition-all duration-500`} style={{ width: `${homePct}%` }} />
@@ -179,7 +173,7 @@ function BestBetCard({ bestBet }) {
   );
 }
 
-// ─── Date Utilities ───────────────────────────────────────────────────────────
+// ─── Next Date Utility ────────────────────────────────────────────────────────
 
 function getNextDateWithGames(games, today = new Date()) {
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
@@ -200,16 +194,14 @@ function getNextDateWithGames(games, today = new Date()) {
   }, futureLabels[0]);
 }
 
-// ─── Game Card ───────────────────────────────────────────────────────────────
+// ─── GameCard ────────────────────────────────────────────────────────────────
 
 function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
   const { home, away, teams, score, status, start_time, win_probability, spread, id } = game;
-  const isLive = status === "in_progress";
-  const isFinal = status === "final" || status === "closed";
+  const isLive = status === "in_progress", isFinal = status === "final" || status === "closed";
   const showUpsetAlert = isUpsetAlert(win_probability, home, away);
   const onARun = isLive ? getMomentum(scoreHistory, id, home, away) : null;
-  const homeScore = score?.[home] ?? 0;
-  const awayScore = score?.[away] ?? 0;
+  const homeScore = score?.[home] ?? 0, awayScore = score?.[away] ?? 0;
 
   return (
     <div className={`bg-white rounded-2xl mb-3 overflow-hidden transition-all
@@ -240,7 +232,7 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
           </div>
         </div>
 
-        <ProbBar home={win_probability?.[home] ?? 50} away={win_probability?.[away] ?? 50} homeAbbr={home} awayAbbr={away} />
+        <ProbBar home={win_probability?.[home]} away={win_probability?.[away]} homeAbbr={home} awayAbbr={away} />
         <SpreadBadge spread={spread} />
         <ScoreTimeline history={scoreHistory[id]} homeAbbr={home} awayAbbr={away} />
       </div>
@@ -272,7 +264,7 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
     (acc[label] = acc[label] || []).push(game);
     return acc;
   }, {});
-  const sortedLabels = Object.keys(grouped).sort((a, b) => new Date(grouped[a][0].start_time) - new Date(grouped[b][0].start_time));
+  const sortedLabels = Object.keys(grouped).sort((a, b) => new Date(a) - new Date(b));
   const hasGamesToday = grouped["Today"]?.length > 0;
   const nextDateWithGames = getNextDateWithGames(games, today);
 
@@ -318,7 +310,7 @@ export default function AllLeagues() {
   const toggleFavorite = useCallback((id) => { setFavoriteIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); localStorage.setItem("favorites", JSON.stringify(Array.from(next))); return next; }); }, []);
   const bestBet = findBestBet(allGames);
 
-  return (
+   return (
     <div className="max-w-3xl mx-auto p-4">
       {bestBet && <BestBetCard bestBet={bestBet} />}
       {LEAGUES.map(league => (
