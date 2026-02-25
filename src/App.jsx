@@ -408,7 +408,7 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
       {isLive && <div className="h-1 bg-gradient-to-r from-red-400 to-orange-400" />}
       {isFavorited && !isLive && <div className="h-1 bg-gradient-to-r from-indigo-400 to-violet-400" />}
 
-      <div className="px-5 py-4">
+      <div className="px-5 pt-4 pb-3">
         {/* Status row */}
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2 min-w-0">
@@ -510,18 +510,23 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
           <ScoreTimeline history={scoreHistory[game.id]} homeAbbr={home} awayAbbr={away} />
         )}
 
-        {/* Expanded stats/events */}
-        {expanded && <ExpandedSection game={game} />}
-
-        {/* Expand / collapse toggle */}
-        <button
-          onClick={() => setExpanded(e => !e)}
-          className="mt-3 w-full flex items-center justify-center gap-1 text-xs text-gray-300 hover:text-gray-500 transition-colors pt-2 border-t border-gray-50"
-        >
-          <span className={`inline-block transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>▾</span>
-          <span>{expanded ? "Less" : "Details"}</span>
-        </button>
       </div>
+
+      {/* Expanded stats/events — own padded section below the main content */}
+      {expanded && (
+        <div className="px-5 pb-4">
+          <ExpandedSection game={game} />
+        </div>
+      )}
+
+      {/* Toggle button — fixed card footer, never moves relative to the teams area */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center justify-center gap-1 text-xs text-gray-300 hover:text-gray-500 transition-colors py-2.5 border-t border-gray-100"
+      >
+        <span className={`inline-block transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>▾</span>
+        <span>{expanded ? "Less" : "Details"}</span>
+      </button>
     </div>
   );
 }
