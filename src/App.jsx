@@ -323,6 +323,26 @@ function ExpandedSection({ game }) {
   );
 }
 
+// ─── App icon ─────────────────────────────────────────────────────────────────
+// A mini chalkboard: dark board, score-chart line, gray chalk tray at the bottom.
+function ChalkboardIcon({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Board */}
+      <rect x="2" y="2" width="24" height="20" rx="3" fill="#111827" />
+      {/* Score-chart line — zigzag like a live game's momentum */}
+      <path
+        d="M5.5 17 L9 9.5 L13 14 L17.5 7.5 L22.5 12.5"
+        stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      />
+      {/* Chalk tray */}
+      <rect x="2" y="21.5" width="24" height="3.5" rx="1.5" fill="#4b5563" />
+      {/* Chalk piece */}
+      <rect x="11.5" y="21" width="5" height="2.5" rx="1" fill="#e5e7eb" />
+    </svg>
+  );
+}
+
 // ─── FEATURE 1: Best Bet Card ─────────────────────────────────────────────────
 // A highlighted hero card shown at the very top of the page.
 // It's visually distinct to draw the eye immediately.
@@ -789,20 +809,27 @@ export default function App() {
     <div className="bg-gray-50 min-h-screen font-sans">
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 flex items-center justify-between">
-        <div>
-          <div className="font-extrabold text-lg tracking-tight">ChalkBoard</div>
-          <div className="text-xs text-gray-400 mt-0.5">
-            {loading && !lastRefresh ? "Loading..." : lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : ""}
-          </div>
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="px-6 py-5 flex items-center justify-center relative">
+        {/* Brand — centred */}
+        <div className="flex items-center gap-2.5">
+          <ChalkboardIcon size={30} />
+          <span className="font-extrabold text-2xl tracking-tight">ChalkBoard</span>
         </div>
+        {/* Refresh — small, pinned top-right */}
         <button
           onClick={fetchAll}
           disabled={loading}
-          className="text-xs text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+          className="absolute right-5 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 disabled:opacity-40"
         >
-          {loading ? "Refreshing..." : "↻ Refresh"}
+          <span className={`text-lg text-gray-400 hover:text-gray-700 transition-colors leading-none ${loading ? "animate-spin" : ""}`}>↻</span>
+          {lastRefresh && (
+            <span className="text-[10px] text-gray-300 leading-none tabular-nums">
+              {lastRefresh.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
         </button>
+      </div>
       </div>
 
       {error && (
