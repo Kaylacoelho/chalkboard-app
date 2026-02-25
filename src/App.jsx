@@ -124,8 +124,7 @@ function ScoreTimeline({ history, homeAbbr, awayAbbr }) {
               {snap[awayAbbr]}–{snap[homeAbbr]}
             </div>
             <div className="text-xs text-gray-300 mt-0.5">
-              {/* Label the snapshot index. In production you'd use real game clock. */}
-              {i === 0 ? "start" : `+${i * 30}s`}
+              {snap.clock ?? (i === 0 ? "start" : `…`)}
             </div>
           </div>
         ))}
@@ -568,7 +567,7 @@ export default function App() {
           if (game.status === "in_progress" && game.score) {
             const prev = scoreHistoryRef.current[game.id] ?? [];
             const lastSnap = prev[prev.length - 1];
-            const currentSnap = { [game.home]: game.score[game.home], [game.away]: game.score[game.away] };
+            const currentSnap = { [game.home]: game.score[game.home], [game.away]: game.score[game.away], clock: game.clock ?? null };
 
             // Only add a new snapshot if the score actually changed
             const scoreChanged =
