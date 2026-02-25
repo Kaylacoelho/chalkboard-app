@@ -633,7 +633,7 @@ export default function App() {
       )}
 
       {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 flex overflow-x-auto px-4">
+      <div className="bg-white border-b border-gray-200 flex overflow-x-auto px-4 sm:px-6 max-w-screen-md mx-auto">
         {LEAGUES.map(l => {
           const liveCount = (allGames[l] ?? []).filter(g => g.status === "in_progress").length;
           const isActive = activeTab === l;
