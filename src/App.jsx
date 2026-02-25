@@ -302,13 +302,13 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
         {/* Teams */}
         <div className="flex items-center gap-3">
           {/* Away team */}
-          <div className="flex-1 flex items-center gap-3">
+          <div className="flex-1 min-w-0 flex items-center gap-3">
             {awayTeam?.logo
-              ? <img src={awayTeam.logo} alt="" className="w-10 h-10 object-contain" />
-              : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{away}</div>
+              ? <img src={awayTeam.logo} alt="" className="w-10 h-10 object-contain flex-shrink-0" />
+              : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">{away}</div>
             }
-            <div>
-              <div className={`font-bold text-sm leading-tight
+            <div className="min-w-0">
+              <div className={`font-bold text-sm leading-tight truncate
                 ${awayWon ? "text-green-600" : isFinal && !awayWon ? "text-gray-400" : "text-gray-900"}`}>
                 {awayTeam?.name ?? away}
               </div>
@@ -333,17 +333,17 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
           </div>
 
           {/* Home team */}
-          <div className="flex-1 flex items-center justify-end gap-3 text-right">
-            <div>
-              <div className={`font-bold text-sm leading-tight
+          <div className="flex-1 min-w-0 flex items-center justify-end gap-3 text-right">
+            <div className="min-w-0">
+              <div className={`font-bold text-sm leading-tight truncate
                 ${homeWon ? "text-green-600" : isFinal && !homeWon ? "text-gray-400" : "text-gray-900"}`}>
                 {homeTeam?.name ?? home}
               </div>
               <div className="text-xs text-gray-400">Home</div>
             </div>
             {homeTeam?.logo
-              ? <img src={homeTeam.logo} alt="" className="w-10 h-10 object-contain" />
-              : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{home}</div>
+              ? <img src={homeTeam.logo} alt="" className="w-10 h-10 object-contain flex-shrink-0" />
+              : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">{home}</div>
             }
           </div>
         </div>
@@ -455,46 +455,48 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
         scoreHistory={scoreHistory}
       />
 
-      {!hasGamesToday && (
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-xs font-bold tracking-widest uppercase text-indigo-500">
-              Today
-            </span>
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400 italic">No games today</span>
-          </div>
-          {nextDateWithGames && (
-            <div className="text-xs text-gray-400 text-center py-2">
-              Next games: <span className="font-semibold text-gray-600">{nextDateWithGames}</span>
+      <div className="lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-5 lg:items-start">
+        {!hasGamesToday && (
+          <div className="mb-6 lg:mb-0">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-bold tracking-widest uppercase text-indigo-500">
+                Today
+              </span>
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400 italic">No games today</span>
             </div>
-          )}
-        </div>
-      )}
-
-      {sortedLabels.map(label => (
-        <div key={label} className="mb-6">
-          <div className="flex items-center gap-3 mb-3">
-            <span className={`text-xs font-bold tracking-widest uppercase
-              ${label === "Today" ? "text-indigo-500" : "text-gray-400"}`}>
-              {label}
-            </span>
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400">{grouped[label].length} games</span>
+            {nextDateWithGames && (
+              <div className="bg-white rounded-2xl border border-gray-100 px-4 py-6 text-xs text-gray-400 text-center">
+                Next games: <span className="font-semibold text-gray-600">{nextDateWithGames}</span>
+              </div>
+            )}
           </div>
-          {grouped[label]
-            .filter(g => !favoriteIds.has(g.id))
-            .map(g => (
-              <GameCard
-                key={g.id}
-                game={g}
-                isFavorited={false}
-                onToggleFavorite={onToggleFavorite}
-                scoreHistory={scoreHistory}
-              />
-            ))}
-        </div>
-      ))}
+        )}
+
+        {sortedLabels.map(label => (
+          <div key={label} className="mb-6 lg:mb-0">
+            <div className="flex items-center gap-3 mb-3">
+              <span className={`text-xs font-bold tracking-widest uppercase
+                ${label === "Today" ? "text-indigo-500" : "text-gray-400"}`}>
+                {label}
+              </span>
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400">{grouped[label].length} games</span>
+            </div>
+            {grouped[label]
+              .filter(g => !favoriteIds.has(g.id))
+              .map(g => (
+                <GameCard
+                  key={g.id}
+                  game={g}
+                  isFavorited={false}
+                  onToggleFavorite={onToggleFavorite}
+                  scoreHistory={scoreHistory}
+                />
+              ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -662,7 +664,7 @@ export default function App() {
       </div>
 
       {/* Content */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 lg:px-6 py-6">
         {!lastRefresh && loading ? (
           <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
         ) : error && currentGames.length === 0 ? (
