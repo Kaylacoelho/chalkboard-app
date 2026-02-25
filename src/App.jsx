@@ -187,6 +187,128 @@ function SpreadBadge({ spread }) {
   );
 }
 
+// ─── Expanded card helpers ────────────────────────────────────────────────────
+
+// Which stats to surface per sport (ESPN stat name → shown in StatsComparison)
+const STAT_DISPLAY = {
+  nba: ["fieldGoalPct", "threePointPct", "freeThrowPct", "rebounds", "assists", "turnovers"],
+  nfl: ["totalYards", "passingYards", "rushingYards", "firstDowns", "turnovers", "sacks"],
+  nhl: ["shotsOnGoal", "powerPlayGoals", "faceoffsWon", "hits", "blockedShots"],
+  mls: ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  ucl: ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+};
+
+function eventIcon(type) {
+  if (!type) return "·";
+  const t = type.toLowerCase();
+  if (t.includes("yellow card")) return "🟨";
+  if (t.includes("red card")) return "🟥";
+  if (t.includes("goal")) return "⚽";
+  if (t.includes("substitut")) return "🔄";
+  return "·";
+}
+
+function EventsGrid({ events, home, away, teams }) {
+  const homeEvents = events.filter(e => e.isHome);
+  const awayEvents = events.filter(e => !e.isHome);
+  return (
+    <div className="grid grid-cols-2 gap-x-4">
+      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+        {teams[home]?.name ?? home}
+      </div>
+      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+        {teams[away]?.name ?? away}
+      </div>
+      <div className="space-y-1.5">
+        {homeEvents.length > 0 ? homeEvents.map((e, i) => (
+          <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600">
+            <span className="text-base leading-none">{eventIcon(e.type)}</span>
+            <span className="text-gray-400 tabular-nums w-8 shrink-0">{e.clock}</span>
+            <span className="truncate">{e.player ?? e.type}</span>
+          </div>
+        )) : <span className="text-xs text-gray-300 italic">—</span>}
+      </div>
+      <div className="space-y-1.5">
+        {awayEvents.length > 0 ? awayEvents.map((e, i) => (
+          <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600">
+            <span className="text-base leading-none">{eventIcon(e.type)}</span>
+            <span className="text-gray-400 tabular-nums w-8 shrink-0">{e.clock}</span>
+            <span className="truncate">{e.player ?? e.type}</span>
+          </div>
+        )) : <span className="text-xs text-gray-300 italic">—</span>}
+      </div>
+    </div>
+  );
+}
+
+function StatsComparison({ homeStats, awayStats, sport }) {
+  const keys = STAT_DISPLAY[sport] ?? [];
+  const rows = keys
+    .map(key => {
+      const h = homeStats?.[key];
+      const a = awayStats?.[key];
+      if (!h && !a) return null;
+      return { key, label: h?.label ?? a?.label ?? key, homeVal: h?.value ?? "—", awayVal: a?.value ?? "—" };
+    })
+    .filter(Boolean);
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      {rows.map(({ key, label, homeVal, awayVal }) => (
+        <div key={key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-xs">
+          <span className="text-right font-semibold text-gray-700">{homeVal}</span>
+          <span className="text-gray-400 text-center min-w-[56px]">{label}</span>
+          <span className="font-semibold text-gray-700">{awayVal}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExpandedSection({ game }) {
+  const { home, away, teams, events, homeStats, awayStats, broadcasts, sport } = game;
+  const hasEvents = events?.length > 0;
+  const hasStats = !!(homeStats || awayStats) && (STAT_DISPLAY[sport] ?? []).length > 0;
+  const hasBroadcasts = broadcasts?.length > 0;
+
+  if (!hasEvents && !hasStats && !hasBroadcasts) {
+    return (
+      <div className="pt-3 border-t border-gray-100 text-xs text-gray-400 text-center italic py-2">
+        No additional data available
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-3 border-t border-gray-100 space-y-4">
+      {hasBroadcasts && (
+        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+          <span>📺</span>
+          <span className="font-medium">{broadcasts.join(" · ")}</span>
+        </div>
+      )}
+      {hasEvents && (
+        <div>
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+            Match Events
+          </div>
+          <EventsGrid events={events} home={home} away={away} teams={teams} />
+        </div>
+      )}
+      {hasStats && (
+        <div>
+          <div className="grid grid-cols-[1fr_auto_1fr] mb-2 text-xs font-semibold text-gray-600">
+            <span className="text-right">{home}</span>
+            <span className="min-w-[56px]" />
+            <span>{away}</span>
+          </div>
+          <StatsComparison homeStats={homeStats} awayStats={awayStats} sport={sport} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── FEATURE 1: Best Bet Card ─────────────────────────────────────────────────
 // A highlighted hero card shown at the very top of the page.
 // It's visually distinct to draw the eye immediately.
@@ -244,7 +366,8 @@ function BestBetCard({ bestBet }) {
 
 // ─── GameCard (updated with features 2, 3, 4, 5) ─────────────────────────────
 
-function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
+function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultExpanded }) {
+  const [expanded, setExpanded] = useState(defaultExpanded ?? false);
   const { home, away, teams, score, status, clock, start_time, win_probability, spread } = game;
   const homeTeam = teams[home];
   const awayTeam = teams[away];
@@ -254,7 +377,6 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
   const showUpsetAlert = isScheduled && isUpsetAlert(win_probability, home, away);
   const onARun = isLive ? getMomentum(scoreHistory, game.id, home, away) : null;
 
-  // Who won? Highlight the winner's name in green for finished games
   const homeScore = score?.[home] ?? 0;
   const awayScore = score?.[away] ?? 0;
   const homeWon = isFinal && homeScore > awayScore;
@@ -268,30 +390,29 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
         ? "shadow-sm ring-2 ring-indigo-300/60"
         : "shadow-sm hover:shadow-md border border-gray-100"}`}>
 
-      {/* Colored top stripe for live games */}
       {isLive && <div className="h-1 bg-gradient-to-r from-red-400 to-orange-400" />}
       {isFavorited && !isLive && <div className="h-1 bg-gradient-to-r from-indigo-400 to-violet-400" />}
 
       <div className="px-5 py-4">
         {/* Status row */}
         <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             {isLive ? <LiveBadge /> : (
-              <span className={`text-xs font-semibold tracking-wide uppercase
+              <span className={`text-xs font-semibold tracking-wide uppercase shrink-0
                 ${isFinal ? "text-gray-400" : "text-indigo-500"}`}>
                 {isFinal ? "Final" : "Upcoming"}
               </span>
             )}
             {isLive && clock && (
-              <span className="text-xs font-medium text-gray-500">{clock}</span>
+              <span className="text-xs font-medium text-gray-500 truncate">{clock}</span>
             )}
             {showUpsetAlert && (
-              <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full shrink-0">
                 ⚡ Upset Alert
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs text-gray-400">{formatTime(start_time)}</span>
             <button
               onClick={(e) => { e.stopPropagation(); onToggleFavorite(game.id); }}
@@ -304,22 +425,23 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
         {/* Teams */}
         <div className="flex items-center gap-3">
           {/* Away team */}
-          <div className="flex-1 min-w-0 flex items-center gap-3">
+          <div className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3">
             {awayTeam?.logo
-              ? <img src={awayTeam.logo} alt="" className="w-10 h-10 object-contain flex-shrink-0" />
-              : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">{away}</div>
+              ? <img src={awayTeam.logo} alt="" className="w-9 h-9 sm:w-10 sm:h-10 object-contain flex-shrink-0" />
+              : <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">{away}</div>
             }
             <div className="min-w-0">
-              <div className={`font-bold text-sm leading-tight truncate
+              <div className={`font-bold text-sm leading-tight
                 ${awayWon ? "text-green-600" : isFinal && !awayWon ? "text-gray-400" : "text-gray-900"}`}>
-                {awayTeam?.name ?? away}
+                <span className="hidden sm:block truncate">{awayTeam?.name ?? away}</span>
+                <span className="sm:hidden">{away}</span>
               </div>
               <div className="text-xs text-gray-400">Away</div>
             </div>
           </div>
 
           {/* Score / VS */}
-          <div className="text-center px-2">
+          <div className="text-center px-1 sm:px-2 shrink-0">
             {!isScheduled ? (
               <div className="font-black text-2xl tracking-tight font-mono tabular-nums text-gray-900">
                 {score?.[away]} <span className="text-gray-300">–</span> {score?.[home]}
@@ -329,23 +451,24 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
             )}
             {onARun && (
               <div className="text-xs font-semibold text-orange-500 mt-1">
-                🔥 {teams[onARun]?.name ?? onARun} on a run
+                🔥 {onARun} on a run
               </div>
             )}
           </div>
 
           {/* Home team */}
-          <div className="flex-1 min-w-0 flex items-center justify-end gap-3 text-right">
+          <div className="flex-1 min-w-0 flex items-center justify-end gap-2 sm:gap-3 text-right">
             <div className="min-w-0">
-              <div className={`font-bold text-sm leading-tight truncate
+              <div className={`font-bold text-sm leading-tight
                 ${homeWon ? "text-green-600" : isFinal && !homeWon ? "text-gray-400" : "text-gray-900"}`}>
-                {homeTeam?.name ?? home}
+                <span className="hidden sm:block truncate">{homeTeam?.name ?? home}</span>
+                <span className="sm:hidden">{home}</span>
               </div>
               <div className="text-xs text-gray-400">Home</div>
             </div>
             {homeTeam?.logo
-              ? <img src={homeTeam.logo} alt="" className="w-10 h-10 object-contain flex-shrink-0" />
-              : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">{home}</div>
+              ? <img src={homeTeam.logo} alt="" className="w-9 h-9 sm:w-10 sm:h-10 object-contain flex-shrink-0" />
+              : <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">{home}</div>
             }
           </div>
         </div>
@@ -371,6 +494,18 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
         {isLive && scoreHistory[game.id]?.length > 1 && (
           <ScoreTimeline history={scoreHistory[game.id]} homeAbbr={home} awayAbbr={away} />
         )}
+
+        {/* Expanded stats/events */}
+        {expanded && <ExpandedSection game={game} />}
+
+        {/* Expand / collapse toggle */}
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="mt-3 w-full flex items-center justify-center gap-1 text-xs text-gray-300 hover:text-gray-500 transition-colors pt-2 border-t border-gray-50"
+        >
+          <span className={`inline-block transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>▾</span>
+          <span>{expanded ? "Less" : "Details"}</span>
+        </button>
       </div>
     </div>
   );
@@ -378,7 +513,7 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory }) {
 
 // ─── FEATURE 3: Favorites section ────────────────────────────────────────────
 // Shows favorited games pinned at the top of the current tab, before other games.
-function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
+function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, defaultExpanded }) {
   const favGames = games.filter(g => favoriteIds.has(g.id));
   if (favGames.length === 0) return null;
 
@@ -394,6 +529,7 @@ function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory }
           isFavorited={true}
           onToggleFavorite={onToggleFavorite}
           scoreHistory={scoreHistory}
+          defaultExpanded={defaultExpanded}
         />
       ))}
       <div className="border-t border-gray-200 mb-4" />
@@ -401,7 +537,7 @@ function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory }
   );
 }
 
-function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
+function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, expandDefault, onToggleExpand }) {
   const [selectedDay, setSelectedDay] = useState(null);
 
   const live = games.filter(g => g.status === "in_progress");
@@ -451,35 +587,46 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
         favoriteIds={favoriteIds}
         onToggleFavorite={onToggleFavorite}
         scoreHistory={scoreHistory}
+        defaultExpanded={expandDefault}
       />
 
-      {/* Day filter tabs */}
+      {/* Day filter tabs + expand toggle */}
       {sortedLabels.length > 0 && (
-        <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
-          {sortedLabels.map(label => {
-            const liveCount = (grouped[label] ?? []).filter(g => g.status === "in_progress").length;
-            const isActive = activeDay === label;
-            return (
-              <button
-                key={label}
-                onClick={() => setSelectedDay(label)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors
-                  ${isActive
-                    ? "bg-gray-900 text-white"
-                    : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700"}`}
-              >
-                {label}
-                {liveCount > 0 ? (
-                  <span className={`text-xs font-bold px-1.5 py-px rounded-full leading-none
-                    ${isActive ? "bg-red-500 text-white" : "bg-red-100 text-red-600"}`}>
-                    {liveCount}
-                  </span>
-                ) : (
-                  <span className="opacity-50">{grouped[label].length}</span>
-                )}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2 mb-5">
+          <div className="flex gap-2 overflow-x-auto pb-1 flex-1 min-w-0">
+            {sortedLabels.map(label => {
+              const liveCount = (grouped[label] ?? []).filter(g => g.status === "in_progress").length;
+              const isActive = activeDay === label;
+              return (
+                <button
+                  key={label}
+                  onClick={() => setSelectedDay(label)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors
+                    ${isActive
+                      ? "bg-gray-900 text-white"
+                      : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700"}`}
+                >
+                  {label}
+                  {liveCount > 0 ? (
+                    <span className={`text-xs font-bold px-1.5 py-px rounded-full leading-none
+                      ${isActive ? "bg-red-500 text-white" : "bg-red-100 text-red-600"}`}>
+                      {liveCount}
+                    </span>
+                  ) : (
+                    <span className="opacity-50">{grouped[label].length}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {/* Expand/collapse all toggle */}
+          <button
+            onClick={onToggleExpand}
+            title={expandDefault ? "Collapse all cards" : "Expand all cards"}
+            className="shrink-0 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 bg-white rounded-lg px-2.5 py-1.5 transition-colors"
+          >
+            {expandDefault ? "⊟" : "⊞"}
+          </button>
         </div>
       )}
 
@@ -493,6 +640,7 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
             isFavorited={false}
             onToggleFavorite={onToggleFavorite}
             scoreHistory={scoreHistory}
+            defaultExpanded={expandDefault}
           />
         ))}
     </div>
@@ -515,6 +663,17 @@ export default function App() {
     const saved = localStorage.getItem("chalkboard_favorites");
     return new Set(saved ? JSON.parse(saved) : []);
   });
+
+  const [expandDefault, setExpandDefault] = useState(
+    () => localStorage.getItem("chalkboard_expand_default") === "true"
+  );
+  const toggleExpandDefault = () => {
+    setExpandDefault(prev => {
+      const next = !prev;
+      localStorage.setItem("chalkboard_expand_default", String(next));
+      return next;
+    });
+  };
 
   // Feature 4+5: scoreHistory tracks score snapshots for live games.
   // We use useRef instead of useState because we DON'T want React to
@@ -686,6 +845,8 @@ export default function App() {
                 favoriteIds={favoriteIds}
                 onToggleFavorite={toggleFavorite}
                 scoreHistory={scoreHistory}
+                expandDefault={expandDefault}
+                onToggleExpand={toggleExpandDefault}
               />
             )}
           </>
