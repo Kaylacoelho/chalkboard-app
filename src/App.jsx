@@ -107,6 +107,106 @@ function getMomentum(scoreHistory, gameId, homeAbbr, awayAbbr) {
   return null; // both scored or neither scored
 }
 
+// ─── Advanced feature helpers ─────────────────────────────────────────────────
+
+// Feature: Entertainment rating (1–10) for finished games.
+// Based on margin of victory, lead changes (from score history), and OT.
+function calcEntertainmentRating(game, scoreHistory) {
+  if (game.status !== "final") return null;
+  const homeScore = game.score?.[game.home] ?? 0;
+  const awayScore = game.score?.[game.away] ?? 0;
+  const margin = Math.abs(homeScore - awayScore);
+  let rating = 5;
+  if (margin === 0)       rating += 2;
+  else if (margin <= 2)   rating += 2.5;
+  else if (margin <= 5)   rating += 1.5;
+  else if (margin <= 10)  rating += 0.5;
+  else if (margin > 20)   rating -= 1.5;
+  const history = scoreHistory?.[game.id] ?? [];
+  if (history.length >= 2) {
+    let changes = 0, prevLead = null;
+    for (const snap of history) {
+      const lead = snap[game.home] > snap[game.away] ? game.home
+                 : snap[game.away] > snap[game.home] ? game.away : null;
+      if (prevLead && lead && lead !== prevLead) changes++;
+      if (lead) prevLead = lead;
+    }
+    rating += Math.min(changes * 0.8, 2);
+  }
+  if (game.clock && /OT|overtime|extra|pen/i.test(game.clock)) rating += 1.5;
+  return Math.max(1, Math.min(10, +rating.toFixed(1)));
+}
+
+// Feature: Is this live game currently tense? (close score, late in game)
+function isTenseMoment(game) {
+  if (game.status !== "in_progress" || !game.score) return false;
+  const margin = Math.abs((game.score[game.home] ?? 0) - (game.score[game.away] ?? 0));
+  const clock = (game.clock ?? "").toLowerCase();
+  const isLate =
+    clock.includes("4th") ||
+    (clock.includes("3rd") && game.sport === "nhl") ||
+    clock.includes("ot") || clock.includes("overtime") || clock.includes("extra") ||
+    /\b[7-9]\d'|\b1[0-9]\d'/.test(clock); // soccer 70'+
+  const threshold = { nba: 5, nfl: 8, nhl: 1, mls: 1, ucl: 1 }[game.sport] ?? 5;
+  return isLate && margin <= threshold;
+}
+
+// Feature: Find the single most exciting live game across all leagues.
+function findBestLiveGame(allGames, scoreHistory) {
+  let best = null, bestScore = -1;
+  for (const [league, games] of Object.entries(allGames)) {
+    for (const game of games) {
+      if (game.status !== "in_progress") continue;
+      const margin = Math.abs((game.score?.[game.home] ?? 0) - (game.score?.[game.away] ?? 0));
+      let excitement = Math.max(0, 15 - margin * 1.5);
+      if (isTenseMoment(game)) excitement += 8;
+      excitement += Math.min((scoreHistory?.[game.id] ?? []).length, 5);
+      if (excitement > bestScore) { bestScore = excitement; best = { game, league }; }
+    }
+  }
+  return best;
+}
+
+// Feature: Auto-generate a one-sentence recap for a finished game.
+function generateRecap(game) {
+  const { home, away, teams, score, events, clock, sport } = game;
+  if (game.status !== "final") return null;
+  const homeScore = score?.[home] ?? 0;
+  const awayScore = score?.[away] ?? 0;
+  if (homeScore === 0 && awayScore === 0) return null;
+  const winner = homeScore >= awayScore ? home : away;
+  const loser  = winner === home ? away : home;
+  const winScore  = score[winner];
+  const loseScore = score[loser];
+  const margin = winScore - loseScore;
+  const isOT   = clock && /OT|overtime|extra|pen/i.test(clock);
+  const winName  = teams[winner]?.name ?? winner;
+  const loseName = teams[loser]?.name  ?? loser;
+  let line = `${winName} `;
+  if (margin === 0) line += `drew ${winScore}–${loseScore} with ${loseName}`;
+  else line += `${margin <= 2 ? "edged" : margin <= 6 ? "beat" : "defeated"} ${loseName} ${winScore}–${loseScore}`;
+  if (isOT) line += " in extra time";
+  if (events?.length && (sport === "mls" || sport === "ucl")) {
+    const goals = events.filter(e => e.type?.toLowerCase().includes("goal") && !e.type?.toLowerCase().includes("own"));
+    const winGoals = goals.filter(e => (e.isHome && winner === home) || (!e.isHome && winner === away));
+    const last = winGoals[winGoals.length - 1];
+    if (last?.player && margin <= 2) {
+      line += ` — ${last.player} sealed it${last.clock ? ` (${last.clock}')` : ""}`;
+    }
+  }
+  return line + ".";
+}
+
+// Feature: Score delta between last two snapshots — who's scoring right now.
+function getScoreDelta(history, homeAbbr, awayAbbr) {
+  if (!history || history.length < 2) return null;
+  const prev = history[history.length - 2];
+  const curr = history[history.length - 1];
+  const hd = (curr[homeAbbr] ?? 0) - (prev[homeAbbr] ?? 0);
+  const ad = (curr[awayAbbr] ?? 0) - (prev[awayAbbr] ?? 0);
+  return (hd === 0 && ad === 0) ? null : { [homeAbbr]: hd, [awayAbbr]: ad };
+}
+
 // ─── FEATURE 4: Score Timeline ────────────────────────────────────────────────
 // scoreHistory also powers a mini timeline. We show the last few score
 // snapshots as a visual trail so you can see how the game has moved.
@@ -280,13 +380,15 @@ function StatsComparison({ homeStats, awayStats, homeAbbr, awayAbbr, sport }) {
   );
 }
 
-function ExpandedSection({ game }) {
+function ExpandedSection({ game, scoreHistory }) {
   const { home, away, teams, events, homeStats, awayStats, broadcasts, sport } = game;
-  const hasEvents = events?.length > 0;
-  const hasStats = !!(homeStats || awayStats) && (STAT_DISPLAY[sport] ?? []).length > 0;
+  const hasEvents    = events?.length > 0;
+  const hasStats     = !!(homeStats || awayStats);
   const hasBroadcasts = broadcasts?.length > 0;
+  const recap  = generateRecap(game);
+  const rating = calcEntertainmentRating(game, scoreHistory);
 
-  if (!hasEvents && !hasStats && !hasBroadcasts) {
+  if (!hasEvents && !hasStats && !hasBroadcasts && !recap) {
     return (
       <div className="pt-3 border-t border-gray-100 text-xs text-gray-400 text-center italic py-2">
         No additional data available
@@ -296,12 +398,20 @@ function ExpandedSection({ game }) {
 
   return (
     <div className="pt-3 border-t border-gray-100 space-y-4">
+      {/* Auto-generated recap sentence */}
+      {recap && (
+        <p className="text-xs text-gray-500 italic leading-relaxed">{recap}</p>
+      )}
+      {/* Entertainment rating */}
+      {rating !== null && <EntertainmentRating rating={rating} />}
+      {/* Broadcasts */}
       {hasBroadcasts && (
         <div className="flex items-center gap-1.5 text-xs text-gray-500">
           <span>📺</span>
           <span className="font-medium">{broadcasts.join(" · ")}</span>
         </div>
       )}
+      {/* Match events (soccer goals/cards) */}
       {hasEvents && (
         <div>
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
@@ -310,6 +420,7 @@ function ExpandedSection({ game }) {
           <EventsGrid events={events} home={home} away={away} teams={teams} />
         </div>
       )}
+      {/* Team stats comparison */}
       {hasStats && (
         <StatsComparison
           homeStats={homeStats}
@@ -318,6 +429,73 @@ function ExpandedSection({ game }) {
           awayAbbr={away}
           sport={sport}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── Entertainment rating badge ───────────────────────────────────────────────
+function EntertainmentRating({ rating }) {
+  if (!rating) return null;
+  const stars = rating >= 8.5 ? "★★★" : rating >= 6.5 ? "★★" : "★";
+  const label = rating >= 8.5 ? "Must watch" : rating >= 7 ? "Great game" : rating >= 5 ? "Decent" : "Skip it";
+  const color = rating >= 8 ? "text-green-600" : rating >= 6 ? "text-amber-500" : "text-gray-400";
+  return (
+    <div className={`flex items-center gap-1.5 text-xs ${color}`}>
+      <span className="font-bold">{stars}</span>
+      <span className="font-semibold">{rating}/10</span>
+      <span className="text-gray-400">· {label}</span>
+    </div>
+  );
+}
+
+// ─── Best live game hero card ──────────────────────────────────────────────────
+// Shown at the top of every tab when at least one live game is happening.
+// Surfaces the most exciting cross-league game so you know when to tune in.
+function BestLiveCard({ bestLive }) {
+  if (!bestLive) return null;
+  const { game, league } = bestLive;
+  const { home, away, teams, score, clock } = game;
+  const tense = isTenseMoment(game);
+  return (
+    <div className="bg-gradient-to-br from-red-600 to-orange-500 rounded-2xl p-4 mb-4 text-white shadow-lg">
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <span className="text-xs font-extrabold tracking-wider opacity-95">BEST LIVE GAME</span>
+        </div>
+        <span className="text-xs font-semibold opacity-70 uppercase tracking-wide">{league}</span>
+      </div>
+      <div className="flex items-center">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {teams[away]?.logo
+            ? <img src={teams[away].logo} alt="" className="w-8 h-8 object-contain brightness-0 invert opacity-80 shrink-0" />
+            : <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold shrink-0">{away}</div>
+          }
+          <div className="min-w-0">
+            <div className="font-bold text-sm truncate">{teams[away]?.name ?? away}</div>
+            <div className="text-xs opacity-60">Away</div>
+          </div>
+        </div>
+        <div className="text-center px-3 shrink-0">
+          <div className="font-black text-2xl tabular-nums">{score?.[away]} – {score?.[home]}</div>
+          {clock && <div className="text-xs opacity-70 mt-0.5">{clock}</div>}
+        </div>
+        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end text-right">
+          <div className="min-w-0">
+            <div className="font-bold text-sm truncate">{teams[home]?.name ?? home}</div>
+            <div className="text-xs opacity-60">Home</div>
+          </div>
+          {teams[home]?.logo
+            ? <img src={teams[home].logo} alt="" className="w-8 h-8 object-contain brightness-0 invert opacity-80 shrink-0" />
+            : <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold shrink-0">{home}</div>
+          }
+        </div>
+      </div>
+      {tense && (
+        <div className="mt-2.5 text-center text-xs font-semibold bg-white/20 rounded-xl py-1.5">
+          ⚡ Getting close — tune in now
+        </div>
       )}
     </div>
   );
@@ -400,7 +578,7 @@ function BestBetCard({ bestBet }) {
 
 // ─── GameCard (updated with features 2, 3, 4, 5) ─────────────────────────────
 
-function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultExpanded }) {
+function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam }) {
   const [expanded, setExpanded] = useState(defaultExpanded ?? false);
   useEffect(() => { setExpanded(defaultExpanded ?? false); }, [defaultExpanded]);
   const { home, away, teams, score, status, clock, start_time, win_probability, spread } = game;
@@ -411,6 +589,11 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
   const isFinal = status === "final" || status === "closed";
   const showUpsetAlert = isScheduled && isUpsetAlert(win_probability, home, away);
   const onARun = isLive ? getMomentum(scoreHistory, game.id, home, away) : null;
+  const tense = isLive && isTenseMoment(game);
+  const scoreDelta = isLive ? getScoreDelta(scoreHistory[game.id], home, away) : null;
+  const scoreDeltaParts = scoreDelta
+    ? [away, home].filter(a => (scoreDelta[a] ?? 0) > 0).map(a => `+${scoreDelta[a]} ${a}`)
+    : [];
 
   const homeScore = score?.[home] ?? 0;
   const awayScore = score?.[away] ?? 0;
@@ -440,6 +623,11 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
             )}
             {isLive && clock && (
               <span className="text-xs font-medium text-gray-500 truncate">{clock}</span>
+            )}
+            {tense && (
+              <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full shrink-0 animate-pulse">
+                ⚡ Tune in!
+              </span>
             )}
             {showUpsetAlert && (
               <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full shrink-0">
@@ -471,7 +659,13 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
                 <span className="hidden sm:block truncate">{awayTeam?.name ?? away}</span>
                 <span className="sm:hidden">{away}</span>
               </div>
-              <div className="text-xs text-gray-400">Away</div>
+              <div className="flex items-center gap-1 text-xs text-gray-400">
+                Away
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleMyTeam?.(away); }}
+                  className={`leading-none transition-colors ${myTeams?.has(away) ? "text-indigo-400" : "text-gray-200 hover:text-indigo-300"}`}
+                >♥</button>
+              </div>
             </div>
           </div>
 
@@ -489,6 +683,11 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
                 🔥 {onARun} on a run
               </div>
             )}
+            {scoreDeltaParts.length > 0 && (
+              <div className="text-xs text-orange-400 font-semibold mt-0.5">
+                {scoreDeltaParts.join(" · ")}
+              </div>
+            )}
           </div>
 
           {/* Home team */}
@@ -499,7 +698,13 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
                 <span className="hidden sm:block truncate">{homeTeam?.name ?? home}</span>
                 <span className="sm:hidden">{home}</span>
               </div>
-              <div className="text-xs text-gray-400">Home</div>
+              <div className="flex items-center justify-end gap-1 text-xs text-gray-400">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleMyTeam?.(home); }}
+                  className={`leading-none transition-colors ${myTeams?.has(home) ? "text-indigo-400" : "text-gray-200 hover:text-indigo-300"}`}
+                >♥</button>
+                Home
+              </div>
             </div>
             {homeTeam?.logo
               ? <img src={homeTeam.logo} alt="" className="w-9 h-9 sm:w-10 sm:h-10 object-contain flex-shrink-0" />
@@ -535,7 +740,7 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
       {/* Expanded stats/events — own padded section below the main content */}
       {expanded && (
         <div className="px-5 pb-4">
-          <ExpandedSection game={game} />
+          <ExpandedSection game={game} scoreHistory={scoreHistory} />
         </div>
       )}
 
@@ -553,7 +758,7 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
 
 // ─── FEATURE 3: Favorites section ────────────────────────────────────────────
 // Shows favorited games pinned at the top of the current tab, before other games.
-function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, defaultExpanded }) {
+function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam }) {
   const favGames = games.filter(g => favoriteIds.has(g.id));
   if (favGames.length === 0) return null;
 
@@ -570,6 +775,8 @@ function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, 
           onToggleFavorite={onToggleFavorite}
           scoreHistory={scoreHistory}
           defaultExpanded={defaultExpanded}
+          myTeams={myTeams}
+          onToggleMyTeam={onToggleMyTeam}
         />
       ))}
       <div className="border-t border-gray-200 mb-4" />
@@ -577,7 +784,7 @@ function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, 
   );
 }
 
-function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, expandDefault, onToggleExpand }) {
+function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, expandDefault, onToggleExpand, myTeams, onToggleMyTeam }) {
   const [selectedDay, setSelectedDay] = useState(null);
 
   const live = games.filter(g => g.status === "in_progress");
@@ -628,6 +835,8 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
         onToggleFavorite={onToggleFavorite}
         scoreHistory={scoreHistory}
         defaultExpanded={expandDefault}
+        myTeams={myTeams}
+        onToggleMyTeam={onToggleMyTeam}
       />
 
       {/* Day filter tabs + expand toggle */}
@@ -635,7 +844,8 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
         <div className="flex items-center gap-2 mb-5">
           <div className="flex gap-2 overflow-x-auto pb-1 flex-1 min-w-0">
             {sortedLabels.map(label => {
-              const liveCount = (grouped[label] ?? []).filter(g => g.status === "in_progress").length;
+              const liveCount  = (grouped[label] ?? []).filter(g => g.status === "in_progress").length;
+              const tenseCount = (grouped[label] ?? []).filter(g => isTenseMoment(g)).length;
               const isActive = activeDay === label;
               return (
                 <button
@@ -647,6 +857,7 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
                       : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700"}`}
                 >
                   {label}
+                  {tenseCount > 0 && <span className="text-orange-500 animate-pulse">⚡</span>}
                   {liveCount > 0 ? (
                     <span className={`text-xs font-bold px-1.5 py-px rounded-full leading-none
                       ${isActive ? "bg-red-500 text-white" : "bg-red-100 text-red-600"}`}>
@@ -681,6 +892,8 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
             onToggleFavorite={onToggleFavorite}
             scoreHistory={scoreHistory}
             defaultExpanded={expandDefault}
+            myTeams={myTeams}
+            onToggleMyTeam={onToggleMyTeam}
           />
         ))}
     </div>
@@ -714,6 +927,20 @@ export default function App() {
       return next;
     });
   };
+
+  // My Teams: follow specific teams across all leagues
+  const [myTeams, setMyTeams] = useState(() => {
+    const saved = localStorage.getItem("chalkboard_my_teams");
+    return new Set(saved ? JSON.parse(saved) : []);
+  });
+  const toggleMyTeam = useCallback((abbr) => {
+    setMyTeams(prev => {
+      const next = new Set(prev);
+      if (next.has(abbr)) next.delete(abbr); else next.add(abbr);
+      localStorage.setItem("chalkboard_my_teams", JSON.stringify(Array.from(next)));
+      return next;
+    });
+  }, []);
 
   // Feature 4+5: scoreHistory tracks score snapshots for live games.
   // We use useRef instead of useState because we DON'T want React to
@@ -802,8 +1029,14 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  const currentGames = allGames[activeTab] ?? [];
-  const bestBet = findBestBet(allGames); // computed across ALL leagues
+  // Games for the "Following" tab — any game where a followed team is playing
+  const followingGames = Object.values(allGames)
+    .flat()
+    .filter(g => myTeams.size > 0 && (myTeams.has(g.home) || myTeams.has(g.away)));
+
+  const currentGames = activeTab === "★" ? followingGames : (allGames[activeTab] ?? []);
+  const bestBet  = findBestBet(allGames);
+  const bestLive = findBestLiveGame(allGames, scoreHistory);
 
   return (
     <div className="bg-gray-50 min-h-screen font-sans">
@@ -839,9 +1072,32 @@ export default function App() {
       )}
 
       {/* Tabs */}
-        <div className="bg-white border-b border-gray-200 flex overflow-x-auto px-3">        
-          {LEAGUES.map(l => {
-          const liveCount = (allGames[l] ?? []).filter(g => g.status === "in_progress").length;
+      <div className="bg-white border-b border-gray-200 flex overflow-x-auto px-3">
+        {/* ★ Following tab — only visible when at least one team is followed */}
+        {myTeams.size > 0 && (() => {
+          const followingLive = followingGames.filter(g => g.status === "in_progress").length;
+          const isActive = activeTab === "★";
+          return (
+            <button
+              key="★"
+              onClick={() => setActiveTab("★")}
+              className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
+                ${isActive
+                  ? "font-bold text-gray-900 border-gray-900"
+                  : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
+            >
+              ★ Following
+              {followingLive > 0 && (
+                <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">
+                  {followingLive}
+                </span>
+              )}
+            </button>
+          );
+        })()}
+        {LEAGUES.map(l => {
+          const liveCount  = (allGames[l] ?? []).filter(g => g.status === "in_progress").length;
+          const tenseCount = (allGames[l] ?? []).filter(g => isTenseMoment(g)).length;
           const isActive = activeTab === l;
           return (
             <button
@@ -853,6 +1109,7 @@ export default function App() {
                   : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
             >
               {l}
+              {tenseCount > 0 && <span className="text-orange-500 animate-pulse text-xs">⚡</span>}
               {liveCount > 0 && (
                 <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">
                   {liveCount}
@@ -881,11 +1138,17 @@ export default function App() {
           </div>
         ) : (
           <>
-            {/* Feature 1: Best Bet card — shown on every tab */}
-            <BestBetCard bestBet={bestBet} />
+            {/* Best live game — cross-league urgent alert */}
+            <BestLiveCard bestLive={bestLive} />
+            {/* Best upcoming bet — shown when no live games are active */}
+            {!bestLive && <BestBetCard bestBet={bestBet} />}
 
             {currentGames.length === 0 ? (
-              <div className="text-center py-16 text-gray-400">No games found for {activeTab}.</div>
+              <div className="text-center py-16 text-gray-400">
+                {activeTab === "★"
+                  ? "Follow teams using the ♥ buttons on any game card."
+                  : `No games found for ${activeTab}.`}
+              </div>
             ) : (
               <LeagueSection
                 games={currentGames}
@@ -894,6 +1157,8 @@ export default function App() {
                 scoreHistory={scoreHistory}
                 expandDefault={expandDefault}
                 onToggleExpand={toggleExpandDefault}
+                myTeams={myTeams}
+                onToggleMyTeam={toggleMyTeam}
               />
             )}
           </>
