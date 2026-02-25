@@ -400,6 +400,8 @@ function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory }
 }
 
 function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
+  const [selectedDay, setSelectedDay] = useState(null);
+
   const live = games.filter(g => g.status === "in_progress");
   const upcoming = games.filter(g => g.status === "scheduled");
   const finished = games.filter(g => g.status === "final" || g.status === "closed");
@@ -434,17 +436,11 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
     ...Object.keys(grouped).filter(l => !order.includes(l)),
   ];
 
-  const hasGamesToday = grouped["Today"]?.length > 0;
+  const activeDay = sortedLabels.includes(selectedDay)
+    ? selectedDay
+    : (sortedLabels.includes("Today") ? "Today" : sortedLabels[0]);
 
-  const nextDateWithGames = Object.keys(grouped)
-    .filter(label => label !== "Today" && label !== "Yesterday")
-    .sort((a, b) => {
-      const toDate = (label) => {
-        if (label === "Tomorrow") return tomorrow;
-        return new Date(label);
-      };
-      return toDate(a) - toDate(b);
-    })[0];
+  const activeDayGames = activeDay ? (grouped[activeDay] ?? []) : [];
 
   return (
     <div>
@@ -455,48 +451,48 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory }) {
         scoreHistory={scoreHistory}
       />
 
-      <div className="lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-5 lg:items-start">
-        {!hasGamesToday && (
-          <div className="mb-6 lg:mb-0">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-bold tracking-widest uppercase text-indigo-500">
-                Today
-              </span>
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-xs text-gray-400 italic">No games today</span>
-            </div>
-            {nextDateWithGames && (
-              <div className="bg-white rounded-2xl border border-gray-100 px-4 py-6 text-xs text-gray-400 text-center">
-                Next games: <span className="font-semibold text-gray-600">{nextDateWithGames}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {sortedLabels.map(label => (
-          <div key={label} className="mb-6 lg:mb-0">
-            <div className="flex items-center gap-3 mb-3">
-              <span className={`text-xs font-bold tracking-widest uppercase
-                ${label === "Today" ? "text-indigo-500" : "text-gray-400"}`}>
+      {/* Day filter tabs */}
+      {sortedLabels.length > 0 && (
+        <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+          {sortedLabels.map(label => {
+            const liveCount = (grouped[label] ?? []).filter(g => g.status === "in_progress").length;
+            const isActive = activeDay === label;
+            return (
+              <button
+                key={label}
+                onClick={() => setSelectedDay(label)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors
+                  ${isActive
+                    ? "bg-gray-900 text-white"
+                    : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700"}`}
+              >
                 {label}
-              </span>
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-xs text-gray-400">{grouped[label].length} games</span>
-            </div>
-            {grouped[label]
-              .filter(g => !favoriteIds.has(g.id))
-              .map(g => (
-                <GameCard
-                  key={g.id}
-                  game={g}
-                  isFavorited={false}
-                  onToggleFavorite={onToggleFavorite}
-                  scoreHistory={scoreHistory}
-                />
-              ))}
-          </div>
+                {liveCount > 0 ? (
+                  <span className={`text-xs font-bold px-1.5 py-px rounded-full leading-none
+                    ${isActive ? "bg-red-500 text-white" : "bg-red-100 text-red-600"}`}>
+                    {liveCount}
+                  </span>
+                ) : (
+                  <span className="opacity-50">{grouped[label].length}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Games for active day */}
+      {activeDayGames
+        .filter(g => !favoriteIds.has(g.id))
+        .map(g => (
+          <GameCard
+            key={g.id}
+            game={g}
+            isFavorited={false}
+            onToggleFavorite={onToggleFavorite}
+            scoreHistory={scoreHistory}
+          />
         ))}
-      </div>
     </div>
   );
 }
@@ -664,7 +660,7 @@ export default function App() {
       </div>
 
       {/* Content */}
-      <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 lg:px-6 py-6">
+      <div className="max-w-2xl mx-auto px-4 py-6">
         {!lastRefresh && loading ? (
           <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
         ) : error && currentGames.length === 0 ? (
