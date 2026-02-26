@@ -636,8 +636,8 @@ function BestBetCard({ bestBet }) {
 }
 
 // ─── Team Stats Panel ─────────────────────────────────────────────────────────
-// Full-height fixed drawer that slides in from the right when a crest is clicked.
-// Fetches record, recent form, season stats, and roster from /api/team.
+// Inline right-column card, same visual language as the game card "Details" section.
+// Appears beside the game list when a team crest is clicked.
 function TeamStatsPanel({ team, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -652,176 +652,160 @@ function TeamStatsPanel({ team, onClose }) {
       .catch(() => setLoading(false));
   }, [team?.sport, team?.id]);
 
-  const bgColor = data?.color ? `#${data.color}` : "#111827";
   const logo = data?.logo ?? team.logo;
-
-  // Which season stat keys to highlight for this sport
   const statKeys = SEASON_STAT_DISPLAY[team.sport] ?? [];
   const statRows = data?.seasonStats
     ? statKeys.filter(k => data.seasonStats[k]).map(k => data.seasonStats[k])
     : [];
 
   return (
-    <>
-      {/* Backdrop — clicking it closes the drawer */}
-      <div
-        className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 sticky top-4 overflow-hidden">
 
-      {/* Drawer */}
-      <div className="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-white z-50 flex flex-col shadow-2xl">
-
-        {/* Header — team colour band */}
-        <div className="flex-none p-5 flex items-center gap-4" style={{ backgroundColor: bgColor }}>
-          {logo
-            ? <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center shrink-0 shadow-md">
-                <img src={logo} alt="" className="w-10 h-10 object-contain" />
-              </div>
-            : <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white shrink-0">{team.abbr}</div>
-          }
-          <div className="flex-1 min-w-0">
-            <div className="font-extrabold text-xl text-white truncate leading-tight">{data?.name ?? team.name}</div>
-            <div className="text-sm text-white/70 mt-0.5 font-medium">
-              {loading ? "Loading…" : data?.record?.summary ?? "—"}
-            </div>
+      {/* Header — same minimal style as card status row */}
+      <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-gray-100">
+        {logo
+          ? <img src={logo} alt="" className="w-9 h-9 object-contain shrink-0" />
+          : <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">{team.abbr}</div>
+        }
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-sm text-gray-900 truncate leading-tight">{data?.name ?? team.name}</div>
+          <div className="text-xs text-gray-400 mt-0.5">
+            {loading ? "Loading…" : (data?.record?.summary ?? "—")}
           </div>
-          <button
-            onClick={onClose}
-            className="text-white/60 hover:text-white text-3xl leading-none shrink-0 transition-colors"
-          >×</button>
         </div>
-
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
-          {loading ? (
-            <div className="p-10 text-center text-gray-400">Loading team data…</div>
-          ) : !data || data.error ? (
-            <div className="p-10 text-center text-gray-400">No data available</div>
-          ) : (
-            <>
-              {/* ── Recent form ── */}
-              {data.recentGames?.length > 0 && (
-                <div className="p-5">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
-                    Last {data.recentGames.length} games
-                  </h3>
-                  {/* W/L bubble row */}
-                  <div className="flex gap-2 mb-4 flex-wrap">
-                    {data.recentGames.map((g, i) => (
-                      <div
-                        key={i}
-                        title={`${g.isHome ? "vs" : "@"} ${g.opponent} ${g.teamScore}-${g.oppScore}`}
-                        className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0
-                          ${g.result === "W" ? "bg-green-500" : g.result === "L" ? "bg-red-400" : "bg-gray-400"}`}
-                      >{g.result}</div>
-                    ))}
-                  </div>
-                  {/* Detail rows */}
-                  <div className="space-y-2">
-                    {data.recentGames.map((g, i) => {
-                      const dateStr = new Date(g.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                      return (
-                        <div key={i} className="flex items-center gap-2.5 text-sm">
-                          <span className={`font-bold w-4 shrink-0 text-xs ${g.result === "W" ? "text-green-600" : g.result === "L" ? "text-red-500" : "text-gray-400"}`}>
-                            {g.result}
-                          </span>
-                          <span className="text-gray-400 shrink-0 text-xs w-4">{g.isHome ? "vs" : "@"}</span>
-                          <span className="font-semibold text-gray-800 flex-1 truncate">{g.opponent}</span>
-                          <span className="tabular-nums text-gray-600 text-xs font-medium">{g.teamScore}–{g.oppScore}</span>
-                          <span className="text-gray-300 text-xs shrink-0 w-12 text-right">{dateStr}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Streak ── */}
-              {data.streak && (
-                <div className="px-5 py-4">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Current Streak</h3>
-                  <div className={`text-lg font-bold ${data.streak.type === "W" ? "text-green-600" : data.streak.type === "L" ? "text-red-500" : "text-gray-500"}`}>
-                    {data.streak.type === "W" ? "🔥" : data.streak.type === "L" ? "❄️" : "➖"}
-                    {" "}{data.streak.count} {data.streak.type === "W" ? "wins" : data.streak.type === "L" ? "losses" : "draws"} in a row
-                  </div>
-                </div>
-              )}
-
-              {/* ── Season stats grid ── */}
-              {statRows.length > 0 && (
-                <div className="px-5 py-4">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Season Stats</h3>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {statRows.map((stat, i) => (
-                      <div key={i} className="bg-gray-50 rounded-xl px-4 py-3">
-                        <div className="text-2xl font-extrabold text-gray-900 tabular-nums leading-none">{stat.value}</div>
-                        <div className="text-xs text-gray-400 mt-1.5 font-medium">{stat.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Season highlights ── */}
-              {(data.bestGame?.margin > 0 || data.worstGame?.margin < 0) && (
-                <div className="px-5 py-4">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Season Highlights</h3>
-                  <div className="space-y-2">
-                    {data.bestGame?.margin > 0 && (
-                      <div className="flex items-center gap-3 bg-green-50 rounded-xl px-4 py-3">
-                        <span className="text-green-500 font-bold text-lg shrink-0">↑</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs text-gray-400">Best win</div>
-                          <div className="font-semibold text-gray-800 truncate">{data.bestGame.isHome ? "vs" : "@"} {data.bestGame.opponent}</div>
-                        </div>
-                        <span className="tabular-nums font-bold text-gray-700">{data.bestGame.teamScore}–{data.bestGame.oppScore}</span>
-                      </div>
-                    )}
-                    {data.worstGame?.margin < 0 && (
-                      <div className="flex items-center gap-3 bg-red-50 rounded-xl px-4 py-3">
-                        <span className="text-red-400 font-bold text-lg shrink-0">↓</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs text-gray-400">Worst loss</div>
-                          <div className="font-semibold text-gray-800 truncate">{data.worstGame.isHome ? "vs" : "@"} {data.worstGame.opponent}</div>
-                        </div>
-                        <span className="tabular-nums font-bold text-gray-700">{data.worstGame.teamScore}–{data.worstGame.oppScore}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Roster ── */}
-              {data.topPlayers?.length > 0 && (
-                <div className="px-5 py-4 pb-8">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Roster</h3>
-                  <div className="space-y-3">
-                    {data.topPlayers.map((p, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        {p.headshot
-                          ? <img src={p.headshot} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 bg-gray-100" />
-                          : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">
-                              {p.jersey ?? "?"}
-                            </div>
-                        }
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-gray-900 truncate">{p.name}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">
-                            {p.position && <span>{p.position}</span>}
-                            {p.jersey && <span className="ml-2">#{p.jersey}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        <button
+          onClick={onClose}
+          className="text-gray-300 hover:text-gray-600 text-2xl leading-none shrink-0 transition-colors ml-1"
+        >×</button>
       </div>
-    </>
+
+      {/* Body — scrollable, divided like ExpandedSection */}
+      <div className="overflow-y-auto max-h-[calc(100vh-10rem)] divide-y divide-gray-100">
+        {loading ? (
+          <div className="px-4 py-10 text-center text-xs text-gray-400">Loading…</div>
+        ) : !data || data.error ? (
+          <div className="px-4 py-10 text-center text-xs text-gray-400">No data available</div>
+        ) : (
+          <>
+            {/* ── Streak ── */}
+            {data.streak && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Streak</div>
+                <div className={`text-sm font-bold ${data.streak.type === "W" ? "text-green-600" : data.streak.type === "L" ? "text-red-500" : "text-gray-500"}`}>
+                  {data.streak.type === "W" ? "🔥" : data.streak.type === "L" ? "❄️" : "➖"}
+                  {" "}{data.streak.count} {data.streak.type === "W" ? "wins" : data.streak.type === "L" ? "losses" : "draws"} in a row
+                </div>
+              </div>
+            )}
+
+            {/* ── Season stats grid ── */}
+            {statRows.length > 0 && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Season Stats</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {statRows.map((stat, i) => (
+                    <div key={i} className="bg-gray-50 rounded-xl px-3 py-2.5">
+                      <div className="text-lg font-extrabold text-gray-900 tabular-nums leading-none">{stat.value}</div>
+                      <div className="text-xs text-gray-400 mt-1 font-medium">{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Season highlights ── */}
+            {(data.bestGame?.margin > 0 || data.worstGame?.margin < 0) && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Highlights</div>
+                <div className="space-y-1.5">
+                  {data.bestGame?.margin > 0 && (
+                    <div className="flex items-center gap-2 bg-green-50 rounded-xl px-3 py-2">
+                      <span className="text-green-500 font-bold text-sm shrink-0">↑</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-gray-400">Best win</div>
+                        <div className="text-xs font-semibold text-gray-800 truncate">{data.bestGame.isHome ? "vs" : "@"} {data.bestGame.opponent}</div>
+                      </div>
+                      <span className="tabular-nums text-xs font-bold text-gray-700 shrink-0">{data.bestGame.teamScore}–{data.bestGame.oppScore}</span>
+                    </div>
+                  )}
+                  {data.worstGame?.margin < 0 && (
+                    <div className="flex items-center gap-2 bg-red-50 rounded-xl px-3 py-2">
+                      <span className="text-red-400 font-bold text-sm shrink-0">↓</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-gray-400">Worst loss</div>
+                        <div className="text-xs font-semibold text-gray-800 truncate">{data.worstGame.isHome ? "vs" : "@"} {data.worstGame.opponent}</div>
+                      </div>
+                      <span className="tabular-nums text-xs font-bold text-gray-700 shrink-0">{data.worstGame.teamScore}–{data.worstGame.oppScore}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Recent form ── */}
+            {data.recentGames?.length > 0 && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                  Last {data.recentGames.length} games
+                </div>
+                <div className="flex gap-1.5 flex-wrap mb-2.5">
+                  {data.recentGames.map((g, i) => (
+                    <div
+                      key={i}
+                      title={`${g.isHome ? "vs" : "@"} ${g.opponent} ${g.teamScore}-${g.oppScore}`}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0
+                        ${g.result === "W" ? "bg-green-500" : g.result === "L" ? "bg-red-400" : "bg-gray-400"}`}
+                    >{g.result}</div>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  {data.recentGames.map((g, i) => {
+                    const dateStr = new Date(g.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className={`font-bold w-3 shrink-0 ${g.result === "W" ? "text-green-600" : g.result === "L" ? "text-red-500" : "text-gray-400"}`}>
+                          {g.result}
+                        </span>
+                        <span className="text-gray-400 shrink-0 w-4">{g.isHome ? "vs" : "@"}</span>
+                        <span className="font-medium text-gray-800 flex-1 truncate">{g.opponent}</span>
+                        <span className="tabular-nums text-gray-500 shrink-0">{g.teamScore}–{g.oppScore}</span>
+                        <span className="text-gray-300 shrink-0 w-10 text-right">{dateStr}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Roster ── */}
+            {data.topPlayers?.length > 0 && (
+              <div className="px-4 py-3 pb-5">
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Roster</div>
+                <div className="space-y-2.5">
+                  {data.topPlayers.map((p, i) => (
+                    <div key={i} className="flex items-center gap-2.5">
+                      {p.headshot
+                        ? <img src={p.headshot} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 bg-gray-100" />
+                        : <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">
+                            {p.jersey ?? "?"}
+                          </div>
+                      }
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-xs text-gray-900 truncate">{p.name}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {p.position && <span>{p.position}</span>}
+                          {p.jersey && <span className="ml-1.5">#{p.jersey}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1411,17 +1395,12 @@ export default function App() {
         📌 Win probabilities are statistical model outputs, not betting advice. Always gamble responsibly.
       </div>
 
-      {/* Fixed team drawer — rendered outside the content flow */}
-      {selectedTeam && (
-        <TeamStatsPanel
-          team={selectedTeam}
-          onClose={() => setSelectedTeam(null)}
-        />
-      )}
+      {/* Content — two-column when a team panel is open */}
+      <div className={`${selectedTeam ? "max-w-5xl" : "max-w-2xl"} mx-auto px-4 py-6 transition-all`}>
+        <div className={`${selectedTeam ? "flex gap-5 items-start" : ""}`}>
 
-      {/* Content */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <div className="w-full min-w-0">
+          {/* Game list */}
+          <div className="flex-1 min-w-0">
             {!lastRefresh && loading ? (
               <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
             ) : error && currentGames.length === 0 ? (
@@ -1459,6 +1438,18 @@ export default function App() {
                 )}
               </>
             )}
+          </div>
+
+          {/* Team stats panel — inline right column */}
+          {selectedTeam && (
+            <div className="w-72 shrink-0">
+              <TeamStatsPanel
+                team={selectedTeam}
+                onClose={() => setSelectedTeam(null)}
+              />
+            </div>
+          )}
+
         </div>
       </div>
     </div>
