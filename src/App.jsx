@@ -635,6 +635,85 @@ function BestBetCard({ bestBet }) {
   );
 }
 
+// ─── Featured (🔥 Today) tab ──────────────────────────────────────────────────
+// Cross-league dashboard: best live game, best bet, all live action, top upcoming.
+function FeaturedSection({ bestLive, bestBet, allGames, scoreHistory, onTuneIn, favoriteIds, onToggleFavorite, myTeams, onToggleMyTeam, onSelectTeam, focusedGameId }) {
+  // All live games grouped by league, in league order
+  const liveByLeague = LEAGUES
+    .map(l => ({ league: l, games: (allGames[l] ?? []).filter(g => g.status === "in_progress") }))
+    .filter(({ games }) => games.length > 0);
+
+  // Upcoming games today with upset alerts or odds, sorted by start time
+  const upcomingNotable = LEAGUES
+    .flatMap(l => (allGames[l] ?? []).filter(g => g.status === "scheduled" && (g.win_probability || g.spread)))
+    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+    .slice(0, 6);
+
+  const isEmpty = !bestLive && !bestBet && liveByLeague.length === 0 && upcomingNotable.length === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="text-center py-16 text-gray-400">
+        <div className="text-3xl mb-3">🏟️</div>
+        <div className="font-semibold">No highlights right now</div>
+        <div className="text-sm mt-1">Check back when games are live or scheduled for today.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {bestLive && <BestLiveCard bestLive={bestLive} onTuneIn={onTuneIn} />}
+      {bestBet && <BestBetCard bestBet={bestBet} />}
+
+      {liveByLeague.length > 0 && (
+        <div className="mb-6">
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">🔴 Live Now</div>
+          {liveByLeague.map(({ league, games }) => (
+            <div key={league}>
+              <div className="text-xs font-semibold text-gray-300 uppercase tracking-wider px-1 mb-1.5">{league}</div>
+              {games.map(g => (
+                <GameCard
+                  key={g.id}
+                  game={g}
+                  isFavorited={favoriteIds.has(g.id)}
+                  onToggleFavorite={onToggleFavorite}
+                  scoreHistory={scoreHistory}
+                  defaultExpanded={false}
+                  myTeams={myTeams}
+                  onToggleMyTeam={onToggleMyTeam}
+                  onSelectTeam={onSelectTeam}
+                  focusedGameId={focusedGameId}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {upcomingNotable.length > 0 && (
+        <div>
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">📅 Worth Watching Today</div>
+          {upcomingNotable.map(g => (
+            <GameCard
+              key={g.id}
+              game={g}
+              isFavorited={favoriteIds.has(g.id)}
+              onToggleFavorite={onToggleFavorite}
+              scoreHistory={scoreHistory}
+              defaultExpanded={false}
+              myTeams={myTeams}
+              onToggleMyTeam={onToggleMyTeam}
+              onSelectTeam={onSelectTeam}
+              focusedGameId={focusedGameId}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Team Stats Panel ─────────────────────────────────────────────────────────
 // Inline right-column card, same visual language as the game card "Details" section.
 // Appears beside the game list when a team crest is clicked.
@@ -1164,7 +1243,7 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("NBA");
+  const [activeTab, setActiveTab] = useState("🔥");
   const [allGames, setAllGames] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -1305,7 +1384,7 @@ export default function App() {
     .flat()
     .filter(g => myTeams.size > 0 && (myTeams.has(g.home) || myTeams.has(g.away)));
 
-  const currentGames = activeTab === "★" ? followingGames : (allGames[activeTab] ?? []);
+  const currentGames = activeTab === "★" ? followingGames : activeTab === "🔥" ? [] : (allGames[activeTab] ?? []);
   const bestBet  = findBestBet(allGames);
   const bestLive = findBestLiveGame(allGames, scoreHistory);
 
@@ -1344,6 +1423,27 @@ export default function App() {
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 flex overflow-x-auto px-3">
+        {/* 🔥 Today tab — always first */}
+        {(() => {
+          const totalLive = Object.values(allGames).flat().filter(g => g.status === "in_progress").length;
+          const isActive = activeTab === "🔥";
+          return (
+            <button
+              onClick={() => setActiveTab("🔥")}
+              className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
+                ${isActive
+                  ? "font-bold text-gray-900 border-gray-900"
+                  : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
+            >
+              🔥 Today
+              {totalLive > 0 && (
+                <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">
+                  {totalLive}
+                </span>
+              )}
+            </button>
+          );
+        })()}
         {/* ★ Following tab — only visible when at least one team is followed */}
         {myTeams.size > 0 && (() => {
           const followingLive = followingGames.filter(g => g.status === "in_progress").length;
@@ -1395,15 +1495,29 @@ export default function App() {
         📌 Win probabilities are statistical model outputs, not betting advice. Always gamble responsibly.
       </div>
 
-      {/* Content — two-column when a team panel is open */}
-      <div className="px-4 py-6">
-        <div className="flex gap-5 justify-center items-start">
+      {/* Team stats panel — fixed right overlay, slides in with translateX */}
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 z-20 bg-black/25 transition-opacity duration-300 ${selectedTeam ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        onClick={() => setSelectedTeam(null)}
+      />
+      {/* Sliding panel */}
+      <div className={`fixed right-0 top-0 h-full w-[min(27rem,100vw)] bg-white shadow-2xl z-30 transition-transform duration-300 ease-out overflow-hidden ${selectedTeam ? "translate-x-0" : "translate-x-full"}`}>
+        {selectedTeam && (
+          <TeamStatsPanel
+            team={selectedTeam}
+            onClose={() => setSelectedTeam(null)}
+          />
+        )}
+      </div>
 
-          {/* Game list — width animates smoothly between centered-full and fixed 42rem */}
-          <div className={`transition-all duration-300 ease-out shrink-0 min-w-0 ${selectedTeam ? "w-[42rem]" : "w-full max-w-2xl"}`}>
+      {/* Content — single centered column, never shifts when panel opens */}
+      <div className="px-4 py-6">
+        <div className="flex justify-center">
+          <div className="w-full max-w-2xl min-w-0">
             {!lastRefresh && loading ? (
               <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
-            ) : error && currentGames.length === 0 ? (
+            ) : error && activeTab !== "🔥" && currentGames.length === 0 ? (
               <div className="bg-white border border-gray-200 rounded-xl px-5 py-8 text-center">
                 <div className="text-2xl mb-2">🔌</div>
                 <div className="font-semibold text-gray-700 mb-1">Server not connected</div>
@@ -1411,45 +1525,41 @@ export default function App() {
                   Run <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">node server.js</code> then click Refresh.
                 </div>
               </div>
+            ) : activeTab === "🔥" ? (
+              <FeaturedSection
+                bestLive={bestLive}
+                bestBet={bestBet}
+                allGames={allGames}
+                scoreHistory={scoreHistory}
+                onTuneIn={handleTuneIn}
+                favoriteIds={favoriteIds}
+                onToggleFavorite={toggleFavorite}
+                myTeams={myTeams}
+                onToggleMyTeam={toggleMyTeam}
+                onSelectTeam={setSelectedTeam}
+                focusedGameId={focusedGameId}
+              />
+            ) : currentGames.length === 0 ? (
+              <div className="text-center py-16 text-gray-400">
+                {activeTab === "★"
+                  ? "Follow teams using the ♥ buttons on any game card."
+                  : `No games found for ${activeTab}.`}
+              </div>
             ) : (
-              <>
-                <BestLiveCard bestLive={bestLive} onTuneIn={handleTuneIn} />
-                {!bestLive && <BestBetCard bestBet={bestBet} />}
-
-                {currentGames.length === 0 ? (
-                  <div className="text-center py-16 text-gray-400">
-                    {activeTab === "★"
-                      ? "Follow teams using the ♥ buttons on any game card."
-                      : `No games found for ${activeTab}.`}
-                  </div>
-                ) : (
-                  <LeagueSection
-                    games={currentGames}
-                    favoriteIds={favoriteIds}
-                    onToggleFavorite={toggleFavorite}
-                    scoreHistory={scoreHistory}
-                    expandDefault={expandDefault}
-                    onToggleExpand={toggleExpandDefault}
-                    myTeams={myTeams}
-                    onToggleMyTeam={toggleMyTeam}
-                    onSelectTeam={setSelectedTeam}
-                    focusedGameId={focusedGameId}
-                  />
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Team stats panel — inline right column, animates in/out */}
-          <div className={`shrink-0 overflow-hidden transition-all duration-300 ease-out ${selectedTeam ? "w-[27rem] opacity-100" : "w-0 opacity-0"}`}>
-            {selectedTeam && (
-              <TeamStatsPanel
-                team={selectedTeam}
-                onClose={() => setSelectedTeam(null)}
+              <LeagueSection
+                games={currentGames}
+                favoriteIds={favoriteIds}
+                onToggleFavorite={toggleFavorite}
+                scoreHistory={scoreHistory}
+                expandDefault={expandDefault}
+                onToggleExpand={toggleExpandDefault}
+                myTeams={myTeams}
+                onToggleMyTeam={toggleMyTeam}
+                onSelectTeam={setSelectedTeam}
+                focusedGameId={focusedGameId}
               />
             )}
           </div>
-
         </div>
       </div>
     </div>
