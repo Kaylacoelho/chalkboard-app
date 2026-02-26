@@ -84,6 +84,14 @@ function findBestBet(allGames) {
     }
   }
 
+  // Third pass: no odds at all — just surface any upcoming game so the card isn't empty
+  if (!best) {
+    for (const league of LEAGUES) {
+      const next = (allGames[league] ?? []).find(g => g.status === "scheduled");
+      if (next) { best = { game: next, league, favPct: null }; break; }
+    }
+  }
+
   return best;
 }
 
@@ -595,24 +603,140 @@ function BestBetCard({ bestBet }) {
                 : "Stats lean this way — worth watching closely."}
             </span>
           </>
-        ) : (
+        ) : spread?.favorite ? (
           <>
             <span className="text-yellow-300 font-bold">{teams[favAbbr]?.name ?? favAbbr}</span>
-            {" "}is the listed favorite
-            {spread?.favorite && <> at <span className="font-bold text-white">{spread.favorite}</span></>}
-            {spread?.overUnder && <>, O/U <span className="font-bold text-white">{spread.overUnder}</span></>}.
-            {" "}
-            <span className="text-gray-300">Best available matchup today.</span>
+            {" "}is the listed favorite at <span className="font-bold text-white">{spread.favorite}</span>
+            {spread.overUnder && <>, O/U <span className="font-bold text-white">{spread.overUnder}</span></>}.
+            {" "}<span className="text-gray-300">Best available matchup today.</span>
           </>
+        ) : (
+          <span className="text-gray-300">
+            No odds available yet for this game — check back closer to tip-off.
+          </span>
         )}
       </div>
     </div>
   );
 }
 
+// ─── Team Stats Panel ─────────────────────────────────────────────────────────
+// Appears on the right when a team crest is clicked.
+// Fetches the team's season record and recent results from /api/team.
+function TeamStatsPanel({ team, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!team?.id) { setLoading(false); return; }
+    setLoading(true);
+    setData(null);
+    fetch(`${API_BASE}/team/${team.sport}/${team.id}`)
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [team?.sport, team?.id]);
+
+  const bgColor = data?.color ? `#${data.color}` : "#111827";
+
+  return (
+    <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+      {/* Header — uses team color */}
+      <div className="p-4 flex items-center gap-3" style={{ backgroundColor: bgColor }}>
+        {team.logo
+          ? <img src={team.logo} alt="" className="w-10 h-10 object-contain brightness-0 invert opacity-90 shrink-0" />
+          : <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold text-white shrink-0">{team.abbr}</div>
+        }
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-white truncate">{team.name}</div>
+          {data?.record && <div className="text-xs text-white/70 mt-0.5">{data.record.summary}</div>}
+        </div>
+        <button onClick={onClose} className="text-white/60 hover:text-white text-xl leading-none ml-1 shrink-0">×</button>
+      </div>
+
+      {loading ? (
+        <div className="p-6 text-center text-gray-400 text-sm">Loading…</div>
+      ) : !data || data.error ? (
+        <div className="p-6 text-center text-gray-400 text-sm">No data available</div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+
+          {/* Recent form — coloured W/L/D bubbles + detail rows */}
+          {data.recentGames?.length > 0 && (
+            <div className="p-4">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2.5">
+                Last {data.recentGames.length} games
+              </div>
+              <div className="flex gap-1.5 mb-3">
+                {data.recentGames.map((g, i) => (
+                  <div
+                    key={i}
+                    title={`${g.isHome ? "vs" : "@"} ${g.opponent} ${g.teamScore}-${g.oppScore}`}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0
+                      ${g.result === "W" ? "bg-green-500" : g.result === "L" ? "bg-red-400" : "bg-gray-400"}`}
+                  >{g.result}</div>
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                {data.recentGames.map((g, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs">
+                    <span className={`font-bold w-4 shrink-0 ${g.result === "W" ? "text-green-600" : g.result === "L" ? "text-red-500" : "text-gray-400"}`}>
+                      {g.result}
+                    </span>
+                    <span className="text-gray-400 shrink-0">{g.isHome ? "vs" : "@"}</span>
+                    <span className="font-medium text-gray-700 flex-1">{g.opponent}</span>
+                    <span className="text-gray-400 tabular-nums">{g.teamScore}–{g.oppScore}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Streak */}
+          {data.streak && (
+            <div className="px-4 py-3">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Streak</div>
+              <div className={`text-sm font-semibold ${data.streak.type === "W" ? "text-green-600" : data.streak.type === "L" ? "text-red-500" : "text-gray-500"}`}>
+                {data.streak.type === "W" ? "🔥" : data.streak.type === "L" ? "❄️" : "➖"}
+                {" "}{data.streak.count} {data.streak.type === "W" ? "wins" : data.streak.type === "L" ? "losses" : "draws"} in a row
+              </div>
+            </div>
+          )}
+
+          {/* Season highlights */}
+          {(data.bestGame?.margin > 0 || data.worstGame?.margin < 0) && (
+            <div className="px-4 py-3">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Season highlights</div>
+              <div className="space-y-1.5 text-xs">
+                {data.bestGame?.margin > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-green-500 font-bold shrink-0">↑</span>
+                    <span className="text-gray-500 shrink-0">Best win</span>
+                    <span className="font-medium text-gray-700 flex-1">{data.bestGame.isHome ? "vs" : "@"} {data.bestGame.opponent}</span>
+                    <span className="text-gray-400 tabular-nums">{data.bestGame.teamScore}–{data.bestGame.oppScore}</span>
+                  </div>
+                )}
+                {data.worstGame?.margin < 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-red-400 font-bold shrink-0">↓</span>
+                    <span className="text-gray-500 shrink-0">Worst loss</span>
+                    <span className="font-medium text-gray-700 flex-1">{data.worstGame.isHome ? "vs" : "@"} {data.worstGame.opponent}</span>
+                    <span className="text-gray-400 tabular-nums">{data.worstGame.teamScore}–{data.worstGame.oppScore}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── GameCard (updated with features 2, 3, 4, 5) ─────────────────────────────
 
-function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam }) {
+function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam, onSelectTeam }) {
   const [expanded, setExpanded] = useState(defaultExpanded ?? false);
   useEffect(() => { setExpanded(defaultExpanded ?? false); }, [defaultExpanded]);
   const { home, away, teams, score, status, clock, start_time, win_probability, spread } = game;
@@ -683,10 +807,15 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
         <div className="flex items-center gap-3">
           {/* Away team */}
           <div className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3">
-            {awayTeam?.logo
-              ? <img src={awayTeam.logo} alt="" className="w-9 h-9 sm:w-10 sm:h-10 object-contain flex-shrink-0" />
-              : <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">{away}</div>
-            }
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelectTeam?.({ abbr: away, id: awayTeam?.id, name: awayTeam?.name ?? away, logo: awayTeam?.logo ?? null, sport: game.sport }); }}
+              className="shrink-0 hover:scale-110 active:scale-95 transition-transform"
+            >
+              {awayTeam?.logo
+                ? <img src={awayTeam.logo} alt={away} className="w-9 h-9 sm:w-10 sm:h-10 object-contain" />
+                : <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{away}</div>
+              }
+            </button>
             <div className="min-w-0">
               <div className={`font-bold text-sm leading-tight
                 ${awayWon ? "text-green-600" : isFinal && !awayWon ? "text-gray-400" : "text-gray-900"}`}>
@@ -740,10 +869,15 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
                 Home
               </div>
             </div>
-            {homeTeam?.logo
-              ? <img src={homeTeam.logo} alt="" className="w-9 h-9 sm:w-10 sm:h-10 object-contain flex-shrink-0" />
-              : <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">{home}</div>
-            }
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelectTeam?.({ abbr: home, id: homeTeam?.id, name: homeTeam?.name ?? home, logo: homeTeam?.logo ?? null, sport: game.sport }); }}
+              className="shrink-0 hover:scale-110 active:scale-95 transition-transform"
+            >
+              {homeTeam?.logo
+                ? <img src={homeTeam.logo} alt={home} className="w-9 h-9 sm:w-10 sm:h-10 object-contain" />
+                : <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{home}</div>
+              }
+            </button>
           </div>
         </div>
 
@@ -792,7 +926,7 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
 
 // ─── FEATURE 3: Favorites section ────────────────────────────────────────────
 // Shows favorited games pinned at the top of the current tab, before other games.
-function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam }) {
+function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam, onSelectTeam }) {
   const favGames = games.filter(g => favoriteIds.has(g.id));
   if (favGames.length === 0) return null;
 
@@ -801,26 +935,25 @@ function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, 
       <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">
         ★ Your Favorites
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-        {favGames.map(g => (
-          <GameCard
-            key={g.id}
-            game={g}
-            isFavorited={true}
-            onToggleFavorite={onToggleFavorite}
-            scoreHistory={scoreHistory}
-            defaultExpanded={defaultExpanded}
-            myTeams={myTeams}
-            onToggleMyTeam={onToggleMyTeam}
-          />
-        ))}
-      </div>
+      {favGames.map(g => (
+        <GameCard
+          key={g.id}
+          game={g}
+          isFavorited={true}
+          onToggleFavorite={onToggleFavorite}
+          scoreHistory={scoreHistory}
+          defaultExpanded={defaultExpanded}
+          myTeams={myTeams}
+          onToggleMyTeam={onToggleMyTeam}
+          onSelectTeam={onSelectTeam}
+        />
+      ))}
       <div className="border-t border-gray-200 mb-4" />
     </div>
   );
 }
 
-function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, expandDefault, onToggleExpand, myTeams, onToggleMyTeam }) {
+function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, expandDefault, onToggleExpand, myTeams, onToggleMyTeam, onSelectTeam }) {
   const [selectedDay, setSelectedDay] = useState(null);
 
   const live = games.filter(g => g.status === "in_progress");
@@ -873,6 +1006,7 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
         defaultExpanded={expandDefault}
         myTeams={myTeams}
         onToggleMyTeam={onToggleMyTeam}
+        onSelectTeam={onSelectTeam}
       />
 
       {/* Day filter tabs + expand toggle */}
@@ -918,22 +1052,21 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
       )}
 
       {/* Games for active day */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-        {activeDayGames
-          .filter(g => !favoriteIds.has(g.id))
-          .map(g => (
-            <GameCard
-              key={g.id}
-              game={g}
-              isFavorited={false}
-              onToggleFavorite={onToggleFavorite}
-              scoreHistory={scoreHistory}
-              defaultExpanded={expandDefault}
-              myTeams={myTeams}
-              onToggleMyTeam={onToggleMyTeam}
-            />
-          ))}
-      </div>
+      {activeDayGames
+        .filter(g => !favoriteIds.has(g.id))
+        .map(g => (
+          <GameCard
+            key={g.id}
+            game={g}
+            isFavorited={false}
+            onToggleFavorite={onToggleFavorite}
+            scoreHistory={scoreHistory}
+            defaultExpanded={expandDefault}
+            myTeams={myTeams}
+            onToggleMyTeam={onToggleMyTeam}
+            onSelectTeam={onSelectTeam}
+          />
+        ))}
     </div>
   );
 }
@@ -945,6 +1078,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [selectedTeam, setSelectedTeam] = useState(null);
 
   // Feature 3: favoriteIds is a Set of game IDs the user has starred.
   // We store it in localStorage so it persists across page refreshes.
@@ -1164,43 +1298,59 @@ export default function App() {
 
       {/* Content */}
       <div className="max-w-5xl mx-auto px-4 py-6">
-        {!lastRefresh && loading ? (
-          <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
-        ) : error && currentGames.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl px-5 py-8 text-center">
-            <div className="text-2xl mb-2">🔌</div>
-            <div className="font-semibold text-gray-700 mb-1">Server not connected</div>
-            <div className="text-sm text-gray-500">
-              Run <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">node server.js</code> then click Refresh.
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Best live game — cross-league urgent alert */}
-            <BestLiveCard bestLive={bestLive} />
-            {/* Best upcoming bet — shown when no live games are active */}
-            {!bestLive && <BestBetCard bestBet={bestBet} />}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-            {currentGames.length === 0 ? (
-              <div className="text-center py-16 text-gray-400">
-                {activeTab === "★"
-                  ? "Follow teams using the ♥ buttons on any game card."
-                  : `No games found for ${activeTab}.`}
+          {/* Left: games column — capped at ~42rem so it stays readable */}
+          <div className="w-full lg:max-w-[42rem] min-w-0">
+            {!lastRefresh && loading ? (
+              <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
+            ) : error && currentGames.length === 0 ? (
+              <div className="bg-white border border-gray-200 rounded-xl px-5 py-8 text-center">
+                <div className="text-2xl mb-2">🔌</div>
+                <div className="font-semibold text-gray-700 mb-1">Server not connected</div>
+                <div className="text-sm text-gray-500">
+                  Run <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">node server.js</code> then click Refresh.
+                </div>
               </div>
             ) : (
-              <LeagueSection
-                games={currentGames}
-                favoriteIds={favoriteIds}
-                onToggleFavorite={toggleFavorite}
-                scoreHistory={scoreHistory}
-                expandDefault={expandDefault}
-                onToggleExpand={toggleExpandDefault}
-                myTeams={myTeams}
-                onToggleMyTeam={toggleMyTeam}
-              />
+              <>
+                <BestLiveCard bestLive={bestLive} />
+                {!bestLive && <BestBetCard bestBet={bestBet} />}
+
+                {currentGames.length === 0 ? (
+                  <div className="text-center py-16 text-gray-400">
+                    {activeTab === "★"
+                      ? "Follow teams using the ♥ buttons on any game card."
+                      : `No games found for ${activeTab}.`}
+                  </div>
+                ) : (
+                  <LeagueSection
+                    games={currentGames}
+                    favoriteIds={favoriteIds}
+                    onToggleFavorite={toggleFavorite}
+                    scoreHistory={scoreHistory}
+                    expandDefault={expandDefault}
+                    onToggleExpand={toggleExpandDefault}
+                    myTeams={myTeams}
+                    onToggleMyTeam={toggleMyTeam}
+                    onSelectTeam={setSelectedTeam}
+                  />
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+
+          {/* Right: team stats panel — sticky below the header */}
+          {selectedTeam && (
+            <div className="w-full lg:w-80 shrink-0 lg:sticky lg:top-[80px]">
+              <TeamStatsPanel
+                team={selectedTeam}
+                onClose={() => setSelectedTeam(null)}
+              />
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
