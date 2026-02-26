@@ -5,14 +5,58 @@ import { useState, useEffect, useCallback, useRef } from "react";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 const REFRESH_INTERVAL = 30_000;
 
-const LEAGUE_SLUGS = {
-  "🏀 NBA": "nba",
-  "🏈 NFL": "nfl",
-  "🏒 NHL": "nhl",
-  "⚽️ MLS": "mls",
-  "⚽️ Champions League": "ucl",
-};
-const LEAGUES = Object.keys(LEAGUE_SLUGS);
+// Sport groups define the two-level navigation hierarchy.
+// Each group has a sport label and an ordered list of league slugs with display names.
+const SPORT_GROUPS = [
+  { id: "basketball", label: "🏀 Basketball", leagues: [
+    { slug: "nba",   label: "NBA" },
+    { slug: "wnba",  label: "WNBA" },
+  ]},
+  { id: "football", label: "🏈 Football", leagues: [
+    { slug: "nfl",   label: "NFL" },
+    { slug: "ncaaf", label: "College" },
+  ]},
+  { id: "hockey", label: "🏒 Hockey", leagues: [
+    { slug: "nhl",   label: "NHL" },
+  ]},
+  { id: "baseball", label: "⚾ Baseball", leagues: [
+    { slug: "mlb",   label: "MLB" },
+  ]},
+  { id: "soccer", label: "⚽ Soccer", leagues: [
+    { slug: "mls",        label: "MLS" },
+    { slug: "nwsl",       label: "NWSL" },
+    { slug: "ucl",        label: "Champions League" },
+    { slug: "uel",        label: "Europa League" },
+    { slug: "epl",        label: "Premier League" },
+    { slug: "laliga",     label: "La Liga" },
+    { slug: "bundesliga", label: "Bundesliga" },
+    { slug: "seriea",     label: "Serie A" },
+    { slug: "ligue1",     label: "Ligue 1" },
+    { slug: "ligamx",     label: "Liga MX" },
+  ]},
+];
+
+// Flat ordered list of all league slugs, used for fetching and iteration
+const ALL_LEAGUE_IDS = SPORT_GROUPS.flatMap(g => g.leagues.map(l => l.slug));
+
+// Set of soccer slugs for fast sport-type checks
+const SOCCER_SLUGS = new Set(
+  SPORT_GROUPS.find(g => g.id === "soccer")?.leagues.map(l => l.slug) ?? []
+);
+
+// Human-readable display name for a slug (e.g. "nba" → "NBA", "mls" → "MLS")
+function leagueDisplayName(slug) {
+  for (const group of SPORT_GROUPS) {
+    const found = group.leagues.find(l => l.slug === slug);
+    if (found) return found.label;
+  }
+  return slug.toUpperCase();
+}
+
+// Returns the SPORT_GROUPS entry that contains the given league slug, or null
+function getSportGroup(slug) {
+  return SPORT_GROUPS.find(g => g.leagues.some(l => l.slug === slug)) ?? null;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,9 +130,9 @@ function findBestBet(allGames) {
 
   // Third pass: no odds at all — just surface any upcoming game so the card isn't empty
   if (!best) {
-    for (const league of LEAGUES) {
-      const next = (allGames[league] ?? []).find(g => g.status === "scheduled");
-      if (next) { best = { game: next, league, favPct: null }; break; }
+    for (const slug of ALL_LEAGUE_IDS) {
+      const next = (allGames[slug] ?? []).find(g => g.status === "scheduled");
+      if (next) { best = { game: next, league: slug, favPct: null }; break; }
     }
   }
 
@@ -168,7 +212,7 @@ function isTenseMoment(game) {
     (clock.includes("3rd") && game.sport === "nhl") ||
     clock.includes("ot") || clock.includes("overtime") || clock.includes("extra") ||
     /\b[7-9]\d'|\b1[0-9]\d'/.test(clock); // soccer 70'+
-  const threshold = { nba: 5, nfl: 8, nhl: 1, mls: 1, ucl: 1 }[game.sport] ?? 5;
+  const threshold = SOCCER_SLUGS.has(game.sport) ? 1 : ({ nba: 5, nfl: 8, nhl: 1, ncaaf: 10, mlb: 2, wnba: 5 }[game.sport] ?? 5);
   return isLate && margin <= threshold;
 }
 
@@ -207,7 +251,7 @@ function generateRecap(game) {
   if (margin === 0) line += `drew ${winScore}–${loseScore} with ${loseName}`;
   else line += `${margin <= 2 ? "edged" : margin <= 6 ? "beat" : "defeated"} ${loseName} ${winScore}–${loseScore}`;
   if (isOT) line += " in extra time";
-  if (events?.length && (sport === "mls" || sport === "ucl")) {
+  if (events?.length && SOCCER_SLUGS.has(sport)) {
     const goals = events.filter(e => e.type?.toLowerCase().includes("goal") && !e.type?.toLowerCase().includes("own"));
     const winGoals = goals.filter(e => (e.isHome && winner === home) || (!e.isHome && winner === away));
     const last = winGoals[winGoals.length - 1];
@@ -312,20 +356,44 @@ function SpreadBadge({ spread }) {
 
 // Which stats to surface per sport (ESPN stat name → shown in StatsComparison)
 const STAT_DISPLAY = {
-  nba: ["fieldGoalPct", "threePointPct", "freeThrowPct", "rebounds", "assists", "turnovers"],
-  nfl: ["totalYards", "passingYards", "rushingYards", "firstDowns", "turnovers", "sacks"],
-  nhl: ["shots", "hits", "blocks", "faceoffWinPct", "powerPlayGoals", "pims"],
-  mls: ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
-  ucl: ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  nba:        ["fieldGoalPct", "threePointPct", "freeThrowPct", "rebounds", "assists", "turnovers"],
+  wnba:       ["fieldGoalPct", "threePointPct", "freeThrowPct", "rebounds", "assists", "turnovers"],
+  nfl:        ["totalYards", "passingYards", "rushingYards", "firstDowns", "turnovers", "sacks"],
+  ncaaf:      ["totalYards", "passingYards", "rushingYards", "firstDowns", "turnovers", "sacks"],
+  nhl:        ["shots", "hits", "blocks", "faceoffWinPct", "powerPlayGoals", "pims"],
+  mlb:        ["hits", "runs", "errors", "strikeouts", "walks", "homeRuns"],
+  // Soccer — same keys for all leagues
+  mls:        ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  nwsl:       ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  ucl:        ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  uel:        ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  epl:        ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  laliga:     ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  bundesliga: ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  seriea:     ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  ligue1:     ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
+  ligamx:     ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
 };
 
 // Season-level stats to highlight in the team drawer (keyed by ESPN stat name)
 const SEASON_STAT_DISPLAY = {
-  nba: ["points", "assists", "rebounds", "steals", "blocks", "fieldGoalPct", "threePointPct", "turnovers"],
-  nfl: ["pointsPerGame", "totalYards", "passingYards", "rushingYards", "sacks", "interceptions", "turnovers"],
-  nhl: ["goals", "assists", "points", "plusMinus", "savePct", "goalsAgainstAverage", "powerPlayPct"],
-  mls: ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
-  ucl: ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  nba:        ["points", "assists", "rebounds", "steals", "blocks", "fieldGoalPct", "threePointPct", "turnovers"],
+  wnba:       ["points", "assists", "rebounds", "steals", "blocks", "fieldGoalPct", "threePointPct", "turnovers"],
+  nfl:        ["pointsPerGame", "totalYards", "passingYards", "rushingYards", "sacks", "interceptions", "turnovers"],
+  ncaaf:      ["pointsPerGame", "totalYards", "passingYards", "rushingYards", "sacks", "interceptions", "turnovers"],
+  nhl:        ["goals", "assists", "points", "plusMinus", "savePct", "goalsAgainstAverage", "powerPlayPct"],
+  mlb:        ["battingAvg", "homeRuns", "rbi", "ops", "era", "strikeouts", "wins"],
+  // Soccer — same keys for all leagues
+  mls:        ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  nwsl:       ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  ucl:        ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  uel:        ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  epl:        ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  laliga:     ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  bundesliga: ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  seriea:     ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  ligue1:     ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  ligamx:     ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
 };
 
 function eventIcon(type) {
@@ -503,7 +571,7 @@ function BestLiveCard({ bestLive, onTuneIn }) {
           <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
           <span className="text-xs font-extrabold tracking-wider opacity-95">BEST LIVE GAME</span>
         </div>
-        <span className="text-xs font-semibold opacity-70 uppercase tracking-wide">{league}</span>
+        <span className="text-xs font-semibold opacity-70 uppercase tracking-wide">{leagueDisplayName(league)}</span>
       </div>
       <div className="flex items-center">
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
@@ -584,7 +652,7 @@ function BestBetCard({ bestBet }) {
           <span className="bg-yellow-400 text-gray-900 text-xs font-extrabold px-2 py-0.5 rounded-full tracking-wide">
             🔥 BEST BET
           </span>
-          <span className="text-gray-400 text-xs">{league}</span>
+          <span className="text-gray-400 text-xs">{leagueDisplayName(league)}</span>
         </div>
         <span className="text-gray-400 text-xs">{formatTime(start_time)}</span>
       </div>
@@ -639,13 +707,13 @@ function BestBetCard({ bestBet }) {
 // Cross-league dashboard: best live game, best bet, all live action, top upcoming.
 function FeaturedSection({ bestLive, bestBet, allGames, scoreHistory, onTuneIn, favoriteIds, onToggleFavorite, myTeams, onToggleMyTeam, onSelectTeam, focusedGameId }) {
   // All live games grouped by league, in league order
-  const liveByLeague = LEAGUES
-    .map(l => ({ league: l, games: (allGames[l] ?? []).filter(g => g.status === "in_progress") }))
+  const liveByLeague = ALL_LEAGUE_IDS
+    .map(slug => ({ slug, games: (allGames[slug] ?? []).filter(g => g.status === "in_progress") }))
     .filter(({ games }) => games.length > 0);
 
   // Upcoming games today with upset alerts or odds, sorted by start time
-  const upcomingNotable = LEAGUES
-    .flatMap(l => (allGames[l] ?? []).filter(g => g.status === "scheduled" && (g.win_probability || g.spread)))
+  const upcomingNotable = ALL_LEAGUE_IDS
+    .flatMap(slug => (allGames[slug] ?? []).filter(g => g.status === "scheduled" && (g.win_probability || g.spread)))
     .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
     .slice(0, 6);
 
@@ -669,9 +737,9 @@ function FeaturedSection({ bestLive, bestBet, allGames, scoreHistory, onTuneIn, 
       {liveByLeague.length > 0 && (
         <div className="mb-6">
           <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">🔴 Live Now</div>
-          {liveByLeague.map(({ league, games }) => (
-            <div key={league}>
-              <div className="text-xs font-semibold text-gray-300 uppercase tracking-wider px-1 mb-1.5">{league}</div>
+          {liveByLeague.map(({ slug, games }) => (
+            <div key={slug}>
+              <div className="text-xs font-semibold text-gray-300 uppercase tracking-wider px-1 mb-1.5">{leagueDisplayName(slug)}</div>
               {games.map(g => (
                 <GameCard
                   key={g.id}
@@ -1267,16 +1335,15 @@ function MobileTabPicker({ activeTab, onSetTab, myTeams, allGames, followingGame
   const totalLive = Object.values(allGames).flat().filter(g => g.status === "in_progress").length;
   const followingLive = followingGames.filter(g => g.status === "in_progress").length;
 
-  const tabs = [
-    { id: "🔥", label: "🔥 Today", badge: totalLive > 0 ? totalLive : null },
-    ...(myTeams.size > 0 ? [{ id: "★", label: "★ Following", badge: followingLive > 0 ? followingLive : null }] : []),
-    ...LEAGUES.map(l => {
-      const liveCount = (allGames[l] ?? []).filter(g => g.status === "in_progress").length;
-      return { id: l, label: l, badge: liveCount > 0 ? liveCount : null };
-    }),
-  ];
-
-  const active = tabs.find(t => t.id === activeTab) ?? tabs[0];
+  // Current tab label for the trigger button
+  const activeLabel =
+    activeTab === "🔥" ? "🔥 Today"
+    : activeTab === "★" ? "★ Following"
+    : leagueDisplayName(activeTab);
+  const activeLiveBadge =
+    activeTab === "🔥" ? (totalLive > 0 ? totalLive : null)
+    : activeTab === "★" ? (followingLive > 0 ? followingLive : null)
+    : ((allGames[activeTab] ?? []).filter(g => g.status === "in_progress").length || null);
 
   return (
     <div className="sm:hidden bg-white border-b border-gray-200 px-4 py-2.5 relative z-10">
@@ -1285,9 +1352,9 @@ function MobileTabPicker({ activeTab, onSetTab, myTeams, allGames, followingGame
         className="flex items-center justify-between w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-sm font-semibold text-gray-900"
       >
         <div className="flex items-center gap-2">
-          <span>{active.label}</span>
-          {active.badge && (
-            <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{active.badge}</span>
+          <span>{activeLabel}</span>
+          {activeLiveBadge && (
+            <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{activeLiveBadge}</span>
           )}
         </div>
         <span className={`text-gray-400 text-xs transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▾</span>
@@ -1296,23 +1363,69 @@ function MobileTabPicker({ activeTab, onSetTab, myTeams, allGames, followingGame
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-4 right-4 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-40">
-            {tabs.map(tab => (
+          <div className="absolute left-4 right-4 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-40 max-h-[70vh] overflow-y-auto">
+            {/* Today */}
+            <button
+              onClick={() => { onSetTab("🔥"); setOpen(false); }}
+              className={`w-full flex items-center justify-between px-4 py-3.5 text-sm border-b border-gray-50 transition-colors
+                ${activeTab === "🔥" ? "bg-gray-50 font-semibold text-gray-900" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              <span>🔥 Today</span>
+              <div className="flex items-center gap-2">
+                {totalLive > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{totalLive}</span>}
+                {activeTab === "🔥" && <span className="text-indigo-500 text-sm font-bold">✓</span>}
+              </div>
+            </button>
+            {/* Following */}
+            {myTeams.size > 0 && (
               <button
-                key={tab.id}
-                onClick={() => { onSetTab(tab.id); setOpen(false); }}
-                className={`w-full flex items-center justify-between px-4 py-3.5 text-sm border-b border-gray-50 last:border-0 transition-colors
-                  ${tab.id === activeTab ? "bg-gray-50 font-semibold text-gray-900" : "text-gray-600 hover:bg-gray-50"}`}
+                onClick={() => { onSetTab("★"); setOpen(false); }}
+                className={`w-full flex items-center justify-between px-4 py-3.5 text-sm border-b border-gray-50 transition-colors
+                  ${activeTab === "★" ? "bg-gray-50 font-semibold text-gray-900" : "text-gray-600 hover:bg-gray-50"}`}
               >
-                <span>{tab.label}</span>
+                <span>★ Following</span>
                 <div className="flex items-center gap-2">
-                  {tab.badge && (
-                    <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{tab.badge}</span>
-                  )}
-                  {tab.id === activeTab && <span className="text-indigo-500 text-sm font-bold">✓</span>}
+                  {followingLive > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{followingLive}</span>}
+                  {activeTab === "★" && <span className="text-indigo-500 text-sm font-bold">✓</span>}
                 </div>
               </button>
-            ))}
+            )}
+            {/* Sport groups + nested leagues */}
+            {SPORT_GROUPS.map(group => {
+              const groupLiveCount = group.leagues.reduce(
+                (sum, l) => sum + (allGames[l.slug] ?? []).filter(g => g.status === "in_progress").length, 0
+              );
+              return (
+                <div key={group.id}>
+                  {/* Group header — not tappable, just a label */}
+                  <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-100">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{group.label}</span>
+                    {groupLiveCount > 0 && (
+                      <span className="bg-red-100 text-red-600 text-xs font-bold px-1.5 py-px rounded-full leading-none">{groupLiveCount}</span>
+                    )}
+                  </div>
+                  {/* League rows */}
+                  {group.leagues.map(league => {
+                    const liveCount = (allGames[league.slug] ?? []).filter(g => g.status === "in_progress").length;
+                    const isActive = activeTab === league.slug;
+                    return (
+                      <button
+                        key={league.slug}
+                        onClick={() => { onSetTab(league.slug); setOpen(false); }}
+                        className={`w-full flex items-center justify-between pl-6 pr-4 py-3 text-sm border-b border-gray-50 last:border-0 transition-colors
+                          ${isActive ? "bg-gray-50 font-semibold text-gray-900" : "text-gray-600 hover:bg-gray-50"}`}
+                      >
+                        <span>{league.label}</span>
+                        <div className="flex items-center gap-2">
+                          {liveCount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{liveCount}</span>}
+                          {isActive && <span className="text-indigo-500 text-sm font-bold">✓</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         </>
       )}
@@ -1396,12 +1509,11 @@ export default function App() {
     });
   }, []);
 
-  const fetchLeague = useCallback(async (league) => {
-    const slug = LEAGUE_SLUGS[league];
+  const fetchLeague = useCallback(async (slug) => {
     const response = await fetch(`${API_BASE}/scores/${slug}`);
-    if (!response.ok) throw new Error(`Server error for ${league}: ${response.status}`);
+    if (!response.ok) throw new Error(`Server error for ${slug}: ${response.status}`);
     const data = await response.json();
-    return data.games;
+    return { slug, games: data.games };
   }, []);
 
   const fetchAll = useCallback(async () => {
@@ -1409,16 +1521,16 @@ export default function App() {
     setError(null);
 
     try {
-      const results = await Promise.all(
-        LEAGUES.map(async (league) => {
-          const games = await fetchLeague(league);
-          return { league, games };
-        })
+      // Promise.allSettled lets individual league failures be skipped without killing the whole refresh
+      const results = await Promise.allSettled(
+        ALL_LEAGUE_IDS.map(slug => fetchLeague(slug))
       );
 
       const gameMap = {};
-      for (const { league, games } of results) {
-        gameMap[league] = games;
+      for (const result of results) {
+        if (result.status !== "fulfilled") continue;
+        const { slug, games } = result.value;
+        gameMap[slug] = games;
 
         // Feature 4+5: for every live game, append the current score to its history.
         // We cap history at 10 snapshots to avoid unbounded memory growth.
@@ -1439,6 +1551,10 @@ export default function App() {
             }
           }
         }
+      }
+
+      if (Object.keys(gameMap).length === 0) {
+        setError("Could not reach the ChalkBoard server. Is it running? (node server.js)");
       }
 
       setAllGames(gameMap);
@@ -1464,6 +1580,7 @@ export default function App() {
     .flat()
     .filter(g => myTeams.size > 0 && (myTeams.has(g.home) || myTeams.has(g.away)));
 
+  // currentGames: activeTab is now always "🔥", "★", or a league slug
   const currentGames = activeTab === "★" ? followingGames : activeTab === "🔥" ? [] : (allGames[activeTab] ?? []);
   const bestBet  = findBestBet(allGames);
   const bestLive = findBestLiveGame(allGames, scoreHistory);
@@ -1510,75 +1627,97 @@ export default function App() {
         followingGames={followingGames}
       />
 
-      {/* Desktop tab bar — hidden on small screens */}
-      <div className="hidden sm:flex bg-white border-b border-gray-200 overflow-x-auto px-3">
-        {/* 🔥 Today tab — always first */}
-        {(() => {
-          const totalLive = Object.values(allGames).flat().filter(g => g.status === "in_progress").length;
-          const isActive = activeTab === "🔥";
-          return (
-            <button
-              onClick={() => setActiveTab("🔥")}
-              className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
-                ${isActive
-                  ? "font-bold text-gray-900 border-gray-900"
-                  : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
-            >
-              🔥 Today
-              {totalLive > 0 && (
-                <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">
-                  {totalLive}
-                </span>
+      {/* Desktop tab bar — hidden on small screens, two-row sport group nav */}
+      {(() => {
+        const activeSportGroup = getSportGroup(activeTab);
+        const totalLive = Object.values(allGames).flat().filter(g => g.status === "in_progress").length;
+        const followingLive = followingGames.filter(g => g.status === "in_progress").length;
+        return (
+          <div className="hidden sm:block bg-white border-b border-gray-200">
+            {/* Row 1: Today, Following, sport groups */}
+            <div className="flex overflow-x-auto px-3">
+              <button
+                onClick={() => setActiveTab("🔥")}
+                className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
+                  ${activeTab === "🔥"
+                    ? "font-bold text-gray-900 border-gray-900"
+                    : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
+              >
+                🔥 Today
+                {totalLive > 0 && (
+                  <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{totalLive}</span>
+                )}
+              </button>
+              {myTeams.size > 0 && (
+                <button
+                  onClick={() => setActiveTab("★")}
+                  className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
+                    ${activeTab === "★"
+                      ? "font-bold text-gray-900 border-gray-900"
+                      : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
+                >
+                  ★ Following
+                  {followingLive > 0 && (
+                    <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{followingLive}</span>
+                  )}
+                </button>
               )}
-            </button>
-          );
-        })()}
-        {/* ★ Following tab — only visible when at least one team is followed */}
-        {myTeams.size > 0 && (() => {
-          const followingLive = followingGames.filter(g => g.status === "in_progress").length;
-          const isActive = activeTab === "★";
-          return (
-            <button
-              key="★"
-              onClick={() => setActiveTab("★")}
-              className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
-                ${isActive
-                  ? "font-bold text-gray-900 border-gray-900"
-                  : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
-            >
-              ★ Following
-              {followingLive > 0 && (
-                <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">
-                  {followingLive}
-                </span>
-              )}
-            </button>
-          );
-        })()}
-        {LEAGUES.map(l => {
-          const liveCount  = (allGames[l] ?? []).filter(g => g.status === "in_progress").length;
-          const tenseCount = (allGames[l] ?? []).filter(g => isTenseMoment(g)).length;
-          const isActive = activeTab === l;
-          return (
-            <button
-              key={l}
-              onClick={() => setActiveTab(l)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
-                ${isActive
-                  ? "font-bold text-gray-900 border-gray-900"
-                  : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
-            >
-              {l}
-              {tenseCount > 0 && <span className="text-orange-500 animate-pulse text-xs">⚡</span>}
-              {liveCount > 0 && (
-                <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">
-                  {liveCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+              {SPORT_GROUPS.map(group => {
+                const isGroupActive = group.leagues.some(l => l.slug === activeTab);
+                const groupLiveCount = group.leagues.reduce(
+                  (sum, l) => sum + (allGames[l.slug] ?? []).filter(g => g.status === "in_progress").length, 0
+                );
+                const hasMultiple = group.leagues.length > 1;
+                return (
+                  <button
+                    key={group.id}
+                    onClick={() => { if (!isGroupActive) setActiveTab(group.leagues[0].slug); }}
+                    className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
+                      ${isGroupActive
+                        ? "font-bold text-gray-900 border-gray-900"
+                        : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
+                  >
+                    {group.label}
+                    {hasMultiple && <span className="text-gray-400 text-xs">▾</span>}
+                    {groupLiveCount > 0 && (
+                      <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{groupLiveCount}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Row 2: sub-leagues (only when a sport group with multiple leagues is active) */}
+            {activeSportGroup && activeSportGroup.leagues.length > 1 && (
+              <div className="flex overflow-x-auto px-4 py-1.5 gap-1 bg-gray-50 border-t border-gray-100">
+                {activeSportGroup.leagues.map(league => {
+                  const isActive = activeTab === league.slug;
+                  const liveCount = (allGames[league.slug] ?? []).filter(g => g.status === "in_progress").length;
+                  const tenseCount = (allGames[league.slug] ?? []).filter(g => isTenseMoment(g)).length;
+                  return (
+                    <button
+                      key={league.slug}
+                      onClick={() => setActiveTab(league.slug)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors
+                        ${isActive
+                          ? "bg-gray-900 text-white"
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"}`}
+                    >
+                      {league.label}
+                      {tenseCount > 0 && <span className="text-orange-400 animate-pulse">⚡</span>}
+                      {liveCount > 0 && (
+                        <span className={`text-xs font-bold px-1.5 py-px rounded-full leading-none
+                          ${isActive ? "bg-red-500 text-white" : "bg-red-100 text-red-600"}`}>
+                          {liveCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2 text-xs text-yellow-800">
         📌 Win probabilities are statistical model outputs, not betting advice. Always gamble responsibly.
@@ -1632,7 +1771,7 @@ export default function App() {
               <div className="text-center py-16 text-gray-400">
                 {activeTab === "★"
                   ? "Follow teams using the ♥ buttons on any game card."
-                  : `No games found for ${activeTab}.`}
+                  : `No games found for ${leagueDisplayName(activeTab)}.`}
               </div>
             ) : (
               <LeagueSection
