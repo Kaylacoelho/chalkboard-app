@@ -848,7 +848,7 @@ function TeamStatsPanel({ team, onClose }) {
                         <span className="text-gray-400 shrink-0 w-4">{g.isHome ? "vs" : "@"}</span>
                         <span className="font-medium text-gray-800 flex-1 truncate">{g.opponent}</span>
                         <span className="tabular-nums text-gray-500 shrink-0">{g.teamScore}–{g.oppScore}</span>
-                        <span className="text-gray-300 shrink-0 w-10 text-right">{dateStr}</span>
+                        <span className="text-gray-300 shrink-0 w-12 text-right">{dateStr}</span>
                       </div>
                     );
                   })}
