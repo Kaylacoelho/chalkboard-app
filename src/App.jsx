@@ -467,10 +467,10 @@ function EventsGrid({ events, home, away, teams }) {
     <div className="grid grid-cols-2 gap-x-3">
       {/* Column headers */}
       <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5 text-right">
-        {teams[home]?.name ?? home}
+        {teams[away]?.name ?? away}
       </div>
       <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
-        {teams[away]?.name ?? away}
+        {teams[home]?.name ?? home}
       </div>
 
       {/* Left column: name → time → icon (icon sits at center seam) */}
