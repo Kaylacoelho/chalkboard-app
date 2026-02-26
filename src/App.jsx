@@ -742,24 +742,31 @@ function TeamStatsPanel({ team, onClose }) {
       })()
     : [];
 
+  const bgColor = data?.color ? `#${data.color}` : "#111827";
+
   return (
     <div className="bg-white h-full flex flex-col overflow-hidden">
 
-      {/* Header */}
-      <div className="px-4 pt-5 pb-3 flex items-center gap-3 border-b border-gray-100 shrink-0">
-        {logo
-          ? <img src={logo} alt="" className="w-9 h-9 object-contain shrink-0" />
-          : <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">{team.abbr}</div>
-        }
+      {/* Header — team color band */}
+      <div
+        className="px-5 pt-5 pb-4 flex items-center gap-3.5 shrink-0 transition-colors duration-500"
+        style={{ backgroundColor: bgColor }}
+      >
+        <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+          {logo
+            ? <img src={logo} alt="" className="w-9 h-9 object-contain" />
+            : <span className="text-xs font-bold text-white">{team.abbr}</span>
+          }
+        </div>
         <div className="flex-1 min-w-0">
-          <div className="font-bold text-sm text-gray-900 truncate leading-tight">{data?.name ?? team.name}</div>
-          <div className="text-xs text-gray-400 mt-0.5">
+          <div className="font-bold text-base text-white truncate leading-tight">{data?.name ?? team.name}</div>
+          <div className="text-sm text-white/70 mt-0.5">
             {loading ? "Loading…" : (data?.record?.summary ?? "—")}
           </div>
         </div>
         <button
           onClick={onClose}
-          className="text-gray-300 hover:text-gray-600 text-2xl leading-none shrink-0 transition-colors ml-1"
+          className="text-white/60 hover:text-white text-2xl leading-none shrink-0 transition-colors ml-1"
         >×</button>
       </div>
 
@@ -1249,6 +1256,66 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
     </div>
   );
 }
+// ─── Mobile Tab Picker ────────────────────────────────────────────────────────
+function MobileTabPicker({ activeTab, onSetTab, myTeams, allGames, followingGames }) {
+  const [open, setOpen] = useState(false);
+
+  const totalLive = Object.values(allGames).flat().filter(g => g.status === "in_progress").length;
+  const followingLive = followingGames.filter(g => g.status === "in_progress").length;
+
+  const tabs = [
+    { id: "🔥", label: "🔥 Today", badge: totalLive > 0 ? totalLive : null },
+    ...(myTeams.size > 0 ? [{ id: "★", label: "★ Following", badge: followingLive > 0 ? followingLive : null }] : []),
+    ...LEAGUES.map(l => {
+      const liveCount = (allGames[l] ?? []).filter(g => g.status === "in_progress").length;
+      return { id: l, label: l, badge: liveCount > 0 ? liveCount : null };
+    }),
+  ];
+
+  const active = tabs.find(t => t.id === activeTab) ?? tabs[0];
+
+  return (
+    <div className="sm:hidden bg-white border-b border-gray-200 px-4 py-2.5 relative z-10">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center justify-between w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-sm font-semibold text-gray-900"
+      >
+        <div className="flex items-center gap-2">
+          <span>{active.label}</span>
+          {active.badge && (
+            <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{active.badge}</span>
+          )}
+        </div>
+        <span className={`text-gray-400 text-xs transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute left-4 right-4 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-40">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => { onSetTab(tab.id); setOpen(false); }}
+                className={`w-full flex items-center justify-between px-4 py-3.5 text-sm border-b border-gray-50 last:border-0 transition-colors
+                  ${tab.id === activeTab ? "bg-gray-50 font-semibold text-gray-900" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                <span>{tab.label}</span>
+                <div className="flex items-center gap-2">
+                  {tab.badge && (
+                    <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{tab.badge}</span>
+                  )}
+                  {tab.id === activeTab && <span className="text-indigo-500 text-sm font-bold">✓</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -1431,17 +1498,13 @@ export default function App() {
       )}
 
       {/* Mobile tab picker — shown only on small screens */}
-      <div className="sm:hidden bg-white border-b border-gray-200 px-4 py-2.5">
-        <select
-          value={activeTab}
-          onChange={e => setActiveTab(e.target.value)}
-          className="w-full text-sm font-semibold bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-gray-800 appearance-none"
-        >
-          <option value="🔥">🔥 Today</option>
-          {myTeams.size > 0 && <option value="★">★ Following</option>}
-          {LEAGUES.map(l => <option key={l} value={l}>{l}</option>)}
-        </select>
-      </div>
+      <MobileTabPicker
+        activeTab={activeTab}
+        onSetTab={setActiveTab}
+        myTeams={myTeams}
+        allGames={allGames}
+        followingGames={followingGames}
+      />
 
       {/* Desktop tab bar — hidden on small screens */}
       <div className="hidden sm:flex bg-white border-b border-gray-200 overflow-x-auto px-3">
