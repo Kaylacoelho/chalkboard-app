@@ -1758,7 +1758,7 @@ export default function App() {
                   );
                 })}
               </div>
-              <span className="text-[11px] text-gray-400 whitespace-nowrap ml-4">
+              <span className="text-[11px] text-gray-400 whitespace-nowrap ml-4 px-2">
                 Win probabilities are model outputs, not betting advice. Gamble responsibly.
               </span>
             </div>
