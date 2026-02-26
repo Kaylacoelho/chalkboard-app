@@ -1704,45 +1704,46 @@ export default function App() {
         const followingLive = followingGames.filter(g => g.status === "in_progress").length;
         return (
           <div className="hidden sm:block bg-white border-b border-gray-200">
-            {/* Row 1: Today, Following, sport groups */}
-            <div className="flex overflow-x-auto px-3">
-              <button
-                onClick={() => setActiveTab("🔥")}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
-                  ${activeTab === "🔥"
-                    ? "font-bold text-gray-900 border-gray-900"
-                    : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
-              >
-                🔥 Today
-                {totalLive > 0 && (
-                  <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{totalLive}</span>
-                )}
-              </button>
-              {myTeams.size > 0 && (
+            {/* Row 1: Today, Following, sport groups (with disclaimer on the right) */}
+            <div className="flex items-center justify-between">
+              <div className="flex overflow-x-auto px-3">
                 <button
-                  onClick={() => setActiveTab("★")}
+                  onClick={() => setActiveTab("🔥")}
                   className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
-                    ${activeTab === "★"
+                    ${activeTab === "🔥"
                       ? "font-bold text-gray-900 border-gray-900"
                       : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
                 >
-                  ★ Following
-                  {followingLive > 0 && (
-                    <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{followingLive}</span>
+                  🔥 Today
+                  {totalLive > 0 && (
+                    <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{totalLive}</span>
                   )}
                 </button>
-              )}
-              {SPORT_GROUPS.map(group => {
-                const isGroupActive = group.leagues.some(l => l.slug === activeTab);
-                const groupLiveCount = group.leagues.reduce(
-                  (sum, l) => sum + (allGames[l.slug] ?? []).filter(g => g.status === "in_progress").length, 0
-                );
-                const hasMultiple = group.leagues.length > 1;
-                const c = SPORT_COLORS[group.id];
-                return (
+                {myTeams.size > 0 && (
                   <button
-                    key={group.id}
-                    onClick={() => { if (!isGroupActive) setActiveTab(group.leagues[0].slug); }}
+                    onClick={() => setActiveTab("★")}
+                    className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
+                      ${activeTab === "★"
+                        ? "font-bold text-gray-900 border-gray-900"
+                        : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
+                  >
+                    ★ Following
+                    {followingLive > 0 && (
+                      <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{followingLive}</span>
+                    )}
+                  </button>
+                )}
+                {SPORT_GROUPS.map(group => {
+                  const isGroupActive = group.leagues.some(l => l.slug === activeTab);
+                  const groupLiveCount = group.leagues.reduce(
+                    (sum, l) => sum + (allGames[l.slug] ?? []).filter(g => g.status === "in_progress").length, 0
+                  );
+                  const hasMultiple = group.leagues.length > 1;
+                  const c = SPORT_COLORS[group.id];
+                  return (
+                    <button
+                      key={group.id}
+                      onClick={() => { if (!isGroupActive) setActiveTab(group.leagues[0].slug); }}
                     className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
                       ${isGroupActive
                         ? `font-bold ${c.activeText} ${c.activeBorder}`
@@ -1791,10 +1792,6 @@ export default function App() {
         );
       })()}
 
-      <div className="border-b border-gray-100 px-6 py-1.5 flex items-center justify-center gap-1.5">
-        <span className="text-gray-300 text-xs">ℹ</span>
-        <span className="text-[11px] text-gray-400">Win probabilities are model outputs, not betting advice. Gamble responsibly.</span>
-      </div>
 
       {/* Team stats panel — fixed right overlay, slides in with translateX */}
       {/* Backdrop */}
