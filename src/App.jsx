@@ -711,11 +711,26 @@ function FeaturedSection({ bestLive, bestBet, allGames, scoreHistory, onTuneIn, 
     .map(slug => ({ slug, games: (allGames[slug] ?? []).filter(g => g.status === "in_progress") }))
     .filter(({ games }) => games.length > 0);
 
-  // Upcoming games today with upset alerts or odds, sorted by start time
+  // Upcoming games ranked by matchup quality:
+  // close probability gap (toss-up) → clear favourite → any with a spread → earliest tip-off
   const upcomingNotable = ALL_LEAGUE_IDS
-    .flatMap(slug => (allGames[slug] ?? []).filter(g => g.status === "scheduled" && (g.win_probability || g.spread)))
-    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
-    .slice(0, 6);
+    .flatMap(slug => (allGames[slug] ?? []).filter(g => g.status === "scheduled"))
+    .map(g => {
+      let score = 0;
+      if (g.win_probability) {
+        const home = g.win_probability[g.home] ?? 50;
+        const away = g.win_probability[g.away] ?? 50;
+        const gap = Math.abs(home - away);
+        // Closest matchups score highest; clear favourites still beat "no data"
+        score += gap <= 10 ? 5 : gap <= 20 ? 4 : gap <= 35 ? 3 : gap <= 55 ? 2 : 1;
+      }
+      if (g.spread?.favorite) score += 1;
+      return { g, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score || new Date(a.g.start_time) - new Date(b.g.start_time))
+    .slice(0, 6)
+    .map(({ g }) => g);
 
   const isEmpty = !bestLive && !bestBet && liveByLeague.length === 0 && upcomingNotable.length === 0;
 
@@ -1719,8 +1734,9 @@ export default function App() {
         );
       })()}
 
-      <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2 text-xs text-yellow-800">
-        📌 Win probabilities are statistical model outputs, not betting advice. Always gamble responsibly.
+      <div className="border-b border-gray-100 px-6 py-1.5 flex items-center justify-center gap-1.5">
+        <span className="text-gray-300 text-xs">ℹ</span>
+        <span className="text-[11px] text-gray-400">Win probabilities are model outputs, not betting advice. Gamble responsibly.</span>
       </div>
 
       {/* Team stats panel — fixed right overlay, slides in with translateX */}
