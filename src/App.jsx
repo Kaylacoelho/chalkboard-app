@@ -319,6 +319,15 @@ const STAT_DISPLAY = {
   ucl: ["possessionPct", "shots", "shotsOnTarget", "corners", "fouls"],
 };
 
+// Season-level stats to highlight in the team drawer (keyed by ESPN stat name)
+const SEASON_STAT_DISPLAY = {
+  nba: ["points", "assists", "rebounds", "steals", "blocks", "fieldGoalPct", "threePointPct", "turnovers"],
+  nfl: ["pointsPerGame", "totalYards", "passingYards", "rushingYards", "sacks", "interceptions", "turnovers"],
+  nhl: ["goals", "assists", "points", "plusMinus", "savePct", "goalsAgainstAverage", "powerPlayPct"],
+  mls: ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+  ucl: ["goals", "assists", "shots", "shotsOnTarget", "possessionPct", "cleanSheets", "goalsAgainst"],
+};
+
 function eventIcon(type) {
   if (!type) return "·";
   const t = type.toLowerCase();
@@ -473,11 +482,20 @@ function EntertainmentRating({ rating }) {
 // ─── Best live game hero card ──────────────────────────────────────────────────
 // Shown at the top of every tab when at least one live game is happening.
 // Surfaces the most exciting cross-league game so you know when to tune in.
-function BestLiveCard({ bestLive }) {
+function BestLiveCard({ bestLive, onTuneIn }) {
   if (!bestLive) return null;
   const { game, league } = bestLive;
   const { home, away, teams, score, clock } = game;
   const tense = isTenseMoment(game);
+
+  function TeamLogo({ abbr, logo }) {
+    return logo
+      ? <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+          <img src={logo} alt={abbr} className="w-7 h-7 object-contain" />
+        </div>
+      : <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-xs font-bold text-gray-800 shrink-0 shadow-sm">{abbr}</div>;
+  }
+
   return (
     <div className="bg-gradient-to-br from-red-600 to-orange-500 rounded-2xl p-4 mb-4 text-white shadow-lg">
       <div className="flex items-center justify-between mb-2.5">
@@ -488,11 +506,8 @@ function BestLiveCard({ bestLive }) {
         <span className="text-xs font-semibold opacity-70 uppercase tracking-wide">{league}</span>
       </div>
       <div className="flex items-center">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          {teams[away]?.logo
-            ? <img src={teams[away].logo} alt="" className="w-8 h-8 object-contain brightness-0 invert opacity-80 shrink-0" />
-            : <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold shrink-0">{away}</div>
-          }
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <TeamLogo abbr={away} logo={teams[away]?.logo} />
           <div className="min-w-0">
             <div className="font-bold text-sm truncate">{teams[away]?.name ?? away}</div>
             <div className="text-xs opacity-60">Away</div>
@@ -502,21 +517,21 @@ function BestLiveCard({ bestLive }) {
           <div className="font-black text-2xl tabular-nums">{score?.[away]} – {score?.[home]}</div>
           {clock && <div className="text-xs opacity-70 mt-0.5">{clock}</div>}
         </div>
-        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end text-right">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end text-right">
           <div className="min-w-0">
             <div className="font-bold text-sm truncate">{teams[home]?.name ?? home}</div>
             <div className="text-xs opacity-60">Home</div>
           </div>
-          {teams[home]?.logo
-            ? <img src={teams[home].logo} alt="" className="w-8 h-8 object-contain brightness-0 invert opacity-80 shrink-0" />
-            : <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold shrink-0">{home}</div>
-          }
+          <TeamLogo abbr={home} logo={teams[home]?.logo} />
         </div>
       </div>
       {tense && (
-        <div className="mt-2.5 text-center text-xs font-semibold bg-white/20 rounded-xl py-1.5">
+        <button
+          onClick={() => onTuneIn?.(league, game.id)}
+          className="mt-2.5 w-full text-center text-xs font-semibold bg-white/20 rounded-xl py-1.5 hover:bg-white/30 active:bg-white/40 transition-colors"
+        >
           ⚡ Getting close — tune in now
-        </div>
+        </button>
       )}
     </div>
   );
@@ -621,8 +636,8 @@ function BestBetCard({ bestBet }) {
 }
 
 // ─── Team Stats Panel ─────────────────────────────────────────────────────────
-// Appears on the right when a team crest is clicked.
-// Fetches the team's season record and recent results from /api/team.
+// Full-height fixed drawer that slides in from the right when a crest is clicked.
+// Fetches record, recent form, season stats, and roster from /api/team.
 function TeamStatsPanel({ team, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -638,107 +653,192 @@ function TeamStatsPanel({ team, onClose }) {
   }, [team?.sport, team?.id]);
 
   const bgColor = data?.color ? `#${data.color}` : "#111827";
+  const logo = data?.logo ?? team.logo;
+
+  // Which season stat keys to highlight for this sport
+  const statKeys = SEASON_STAT_DISPLAY[team.sport] ?? [];
+  const statRows = data?.seasonStats
+    ? statKeys.filter(k => data.seasonStats[k]).map(k => data.seasonStats[k])
+    : [];
 
   return (
-    <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-      {/* Header — uses team color */}
-      <div className="p-4 flex items-center gap-3" style={{ backgroundColor: bgColor }}>
-        {team.logo
-          ? <img src={team.logo} alt="" className="w-10 h-10 object-contain brightness-0 invert opacity-90 shrink-0" />
-          : <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold text-white shrink-0">{team.abbr}</div>
-        }
-        <div className="flex-1 min-w-0">
-          <div className="font-bold text-white truncate">{team.name}</div>
-          {data?.record && <div className="text-xs text-white/70 mt-0.5">{data.record.summary}</div>}
+    <>
+      {/* Backdrop — clicking it closes the drawer */}
+      <div
+        className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Drawer */}
+      <div className="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-white z-50 flex flex-col shadow-2xl">
+
+        {/* Header — team colour band */}
+        <div className="flex-none p-5 flex items-center gap-4" style={{ backgroundColor: bgColor }}>
+          {logo
+            ? <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center shrink-0 shadow-md">
+                <img src={logo} alt="" className="w-10 h-10 object-contain" />
+              </div>
+            : <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white shrink-0">{team.abbr}</div>
+          }
+          <div className="flex-1 min-w-0">
+            <div className="font-extrabold text-xl text-white truncate leading-tight">{data?.name ?? team.name}</div>
+            <div className="text-sm text-white/70 mt-0.5 font-medium">
+              {loading ? "Loading…" : data?.record?.summary ?? "—"}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white/60 hover:text-white text-3xl leading-none shrink-0 transition-colors"
+          >×</button>
         </div>
-        <button onClick={onClose} className="text-white/60 hover:text-white text-xl leading-none ml-1 shrink-0">×</button>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+          {loading ? (
+            <div className="p-10 text-center text-gray-400">Loading team data…</div>
+          ) : !data || data.error ? (
+            <div className="p-10 text-center text-gray-400">No data available</div>
+          ) : (
+            <>
+              {/* ── Recent form ── */}
+              {data.recentGames?.length > 0 && (
+                <div className="p-5">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
+                    Last {data.recentGames.length} games
+                  </h3>
+                  {/* W/L bubble row */}
+                  <div className="flex gap-2 mb-4 flex-wrap">
+                    {data.recentGames.map((g, i) => (
+                      <div
+                        key={i}
+                        title={`${g.isHome ? "vs" : "@"} ${g.opponent} ${g.teamScore}-${g.oppScore}`}
+                        className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0
+                          ${g.result === "W" ? "bg-green-500" : g.result === "L" ? "bg-red-400" : "bg-gray-400"}`}
+                      >{g.result}</div>
+                    ))}
+                  </div>
+                  {/* Detail rows */}
+                  <div className="space-y-2">
+                    {data.recentGames.map((g, i) => {
+                      const dateStr = new Date(g.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                      return (
+                        <div key={i} className="flex items-center gap-2.5 text-sm">
+                          <span className={`font-bold w-4 shrink-0 text-xs ${g.result === "W" ? "text-green-600" : g.result === "L" ? "text-red-500" : "text-gray-400"}`}>
+                            {g.result}
+                          </span>
+                          <span className="text-gray-400 shrink-0 text-xs w-4">{g.isHome ? "vs" : "@"}</span>
+                          <span className="font-semibold text-gray-800 flex-1 truncate">{g.opponent}</span>
+                          <span className="tabular-nums text-gray-600 text-xs font-medium">{g.teamScore}–{g.oppScore}</span>
+                          <span className="text-gray-300 text-xs shrink-0 w-12 text-right">{dateStr}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Streak ── */}
+              {data.streak && (
+                <div className="px-5 py-4">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Current Streak</h3>
+                  <div className={`text-lg font-bold ${data.streak.type === "W" ? "text-green-600" : data.streak.type === "L" ? "text-red-500" : "text-gray-500"}`}>
+                    {data.streak.type === "W" ? "🔥" : data.streak.type === "L" ? "❄️" : "➖"}
+                    {" "}{data.streak.count} {data.streak.type === "W" ? "wins" : data.streak.type === "L" ? "losses" : "draws"} in a row
+                  </div>
+                </div>
+              )}
+
+              {/* ── Season stats grid ── */}
+              {statRows.length > 0 && (
+                <div className="px-5 py-4">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Season Stats</h3>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {statRows.map((stat, i) => (
+                      <div key={i} className="bg-gray-50 rounded-xl px-4 py-3">
+                        <div className="text-2xl font-extrabold text-gray-900 tabular-nums leading-none">{stat.value}</div>
+                        <div className="text-xs text-gray-400 mt-1.5 font-medium">{stat.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Season highlights ── */}
+              {(data.bestGame?.margin > 0 || data.worstGame?.margin < 0) && (
+                <div className="px-5 py-4">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Season Highlights</h3>
+                  <div className="space-y-2">
+                    {data.bestGame?.margin > 0 && (
+                      <div className="flex items-center gap-3 bg-green-50 rounded-xl px-4 py-3">
+                        <span className="text-green-500 font-bold text-lg shrink-0">↑</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-400">Best win</div>
+                          <div className="font-semibold text-gray-800 truncate">{data.bestGame.isHome ? "vs" : "@"} {data.bestGame.opponent}</div>
+                        </div>
+                        <span className="tabular-nums font-bold text-gray-700">{data.bestGame.teamScore}–{data.bestGame.oppScore}</span>
+                      </div>
+                    )}
+                    {data.worstGame?.margin < 0 && (
+                      <div className="flex items-center gap-3 bg-red-50 rounded-xl px-4 py-3">
+                        <span className="text-red-400 font-bold text-lg shrink-0">↓</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-400">Worst loss</div>
+                          <div className="font-semibold text-gray-800 truncate">{data.worstGame.isHome ? "vs" : "@"} {data.worstGame.opponent}</div>
+                        </div>
+                        <span className="tabular-nums font-bold text-gray-700">{data.worstGame.teamScore}–{data.worstGame.oppScore}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Roster ── */}
+              {data.topPlayers?.length > 0 && (
+                <div className="px-5 py-4 pb-8">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Roster</h3>
+                  <div className="space-y-3">
+                    {data.topPlayers.map((p, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        {p.headshot
+                          ? <img src={p.headshot} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 bg-gray-100" />
+                          : <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">
+                              {p.jersey ?? "?"}
+                            </div>
+                        }
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm text-gray-900 truncate">{p.name}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {p.position && <span>{p.position}</span>}
+                            {p.jersey && <span className="ml-2">#{p.jersey}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
-
-      {loading ? (
-        <div className="p-6 text-center text-gray-400 text-sm">Loading…</div>
-      ) : !data || data.error ? (
-        <div className="p-6 text-center text-gray-400 text-sm">No data available</div>
-      ) : (
-        <div className="divide-y divide-gray-50">
-
-          {/* Recent form — coloured W/L/D bubbles + detail rows */}
-          {data.recentGames?.length > 0 && (
-            <div className="p-4">
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2.5">
-                Last {data.recentGames.length} games
-              </div>
-              <div className="flex gap-1.5 mb-3">
-                {data.recentGames.map((g, i) => (
-                  <div
-                    key={i}
-                    title={`${g.isHome ? "vs" : "@"} ${g.opponent} ${g.teamScore}-${g.oppScore}`}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0
-                      ${g.result === "W" ? "bg-green-500" : g.result === "L" ? "bg-red-400" : "bg-gray-400"}`}
-                  >{g.result}</div>
-                ))}
-              </div>
-              <div className="space-y-1.5">
-                {data.recentGames.map((g, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className={`font-bold w-4 shrink-0 ${g.result === "W" ? "text-green-600" : g.result === "L" ? "text-red-500" : "text-gray-400"}`}>
-                      {g.result}
-                    </span>
-                    <span className="text-gray-400 shrink-0">{g.isHome ? "vs" : "@"}</span>
-                    <span className="font-medium text-gray-700 flex-1">{g.opponent}</span>
-                    <span className="text-gray-400 tabular-nums">{g.teamScore}–{g.oppScore}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Streak */}
-          {data.streak && (
-            <div className="px-4 py-3">
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Streak</div>
-              <div className={`text-sm font-semibold ${data.streak.type === "W" ? "text-green-600" : data.streak.type === "L" ? "text-red-500" : "text-gray-500"}`}>
-                {data.streak.type === "W" ? "🔥" : data.streak.type === "L" ? "❄️" : "➖"}
-                {" "}{data.streak.count} {data.streak.type === "W" ? "wins" : data.streak.type === "L" ? "losses" : "draws"} in a row
-              </div>
-            </div>
-          )}
-
-          {/* Season highlights */}
-          {(data.bestGame?.margin > 0 || data.worstGame?.margin < 0) && (
-            <div className="px-4 py-3">
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Season highlights</div>
-              <div className="space-y-1.5 text-xs">
-                {data.bestGame?.margin > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-green-500 font-bold shrink-0">↑</span>
-                    <span className="text-gray-500 shrink-0">Best win</span>
-                    <span className="font-medium text-gray-700 flex-1">{data.bestGame.isHome ? "vs" : "@"} {data.bestGame.opponent}</span>
-                    <span className="text-gray-400 tabular-nums">{data.bestGame.teamScore}–{data.bestGame.oppScore}</span>
-                  </div>
-                )}
-                {data.worstGame?.margin < 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-red-400 font-bold shrink-0">↓</span>
-                    <span className="text-gray-500 shrink-0">Worst loss</span>
-                    <span className="font-medium text-gray-700 flex-1">{data.worstGame.isHome ? "vs" : "@"} {data.worstGame.opponent}</span>
-                    <span className="text-gray-400 tabular-nums">{data.worstGame.teamScore}–{data.worstGame.oppScore}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
 // ─── GameCard (updated with features 2, 3, 4, 5) ─────────────────────────────
 
-function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam, onSelectTeam }) {
+function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam, onSelectTeam, focusedGameId }) {
   const [expanded, setExpanded] = useState(defaultExpanded ?? false);
+  const cardRef = useRef(null);
   useEffect(() => { setExpanded(defaultExpanded ?? false); }, [defaultExpanded]);
+
+  // Scroll into view and auto-expand when this card is focused via "Tune In"
+  useEffect(() => {
+    if (focusedGameId === game.id && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      setExpanded(true);
+    }
+  }, [focusedGameId, game.id]);
   const { home, away, teams, score, status, clock, start_time, win_probability, spread } = game;
   const homeTeam = teams[home];
   const awayTeam = teams[away];
@@ -759,12 +859,16 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
   const awayWon = isFinal && awayScore > homeScore;
 
   return (
-    <div className={`bg-white rounded-2xl mb-3 overflow-hidden transition-all
-      ${isLive
-        ? "shadow-md ring-2 ring-red-400/40"
-        : isFavorited
-        ? "shadow-sm ring-2 ring-indigo-300/60"
-        : "shadow-sm hover:shadow-md border border-gray-100"}`}>
+    <div
+      ref={cardRef}
+      className={`bg-white rounded-2xl mb-3 overflow-hidden transition-all
+        ${focusedGameId === game.id ? "ring-2 ring-orange-400 shadow-lg" : ""}
+        ${isLive
+          ? "shadow-md ring-2 ring-red-400/40"
+          : isFavorited
+          ? "shadow-sm ring-2 ring-indigo-300/60"
+          : "shadow-sm hover:shadow-md border border-gray-100"}`}
+    >
 
       {isLive && <div className="h-1 bg-gradient-to-r from-red-400 to-orange-400" />}
       {isFavorited && !isLive && <div className="h-1 bg-gradient-to-r from-indigo-400 to-violet-400" />}
@@ -926,7 +1030,7 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
 
 // ─── FEATURE 3: Favorites section ────────────────────────────────────────────
 // Shows favorited games pinned at the top of the current tab, before other games.
-function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam, onSelectTeam }) {
+function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, defaultExpanded, myTeams, onToggleMyTeam, onSelectTeam, focusedGameId }) {
   const favGames = games.filter(g => favoriteIds.has(g.id));
   if (favGames.length === 0) return null;
 
@@ -946,6 +1050,7 @@ function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, 
           myTeams={myTeams}
           onToggleMyTeam={onToggleMyTeam}
           onSelectTeam={onSelectTeam}
+          focusedGameId={focusedGameId}
         />
       ))}
       <div className="border-t border-gray-200 mb-4" />
@@ -953,7 +1058,7 @@ function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, 
   );
 }
 
-function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, expandDefault, onToggleExpand, myTeams, onToggleMyTeam, onSelectTeam }) {
+function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, expandDefault, onToggleExpand, myTeams, onToggleMyTeam, onSelectTeam, focusedGameId }) {
   const [selectedDay, setSelectedDay] = useState(null);
 
   const live = games.filter(g => g.status === "in_progress");
@@ -1007,6 +1112,7 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
         myTeams={myTeams}
         onToggleMyTeam={onToggleMyTeam}
         onSelectTeam={onSelectTeam}
+        focusedGameId={focusedGameId}
       />
 
       {/* Day filter tabs + expand toggle */}
@@ -1065,6 +1171,7 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
             myTeams={myTeams}
             onToggleMyTeam={onToggleMyTeam}
             onSelectTeam={onSelectTeam}
+            focusedGameId={focusedGameId}
           />
         ))}
     </div>
@@ -1079,6 +1186,14 @@ export default function App() {
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(null);
+  const [focusedGameId, setFocusedGameId] = useState(null);
+
+  // "Tune in now" — switch to the right league tab and highlight the game card
+  const handleTuneIn = useCallback((league, gameId) => {
+    setActiveTab(league);
+    setFocusedGameId(gameId);
+    setTimeout(() => setFocusedGameId(null), 2000);
+  }, []);
 
   // Feature 3: favoriteIds is a Set of game IDs the user has starred.
   // We store it in localStorage so it persists across page refreshes.
@@ -1296,12 +1411,17 @@ export default function App() {
         📌 Win probabilities are statistical model outputs, not betting advice. Always gamble responsibly.
       </div>
 
-      {/* Content */}
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
+      {/* Fixed team drawer — rendered outside the content flow */}
+      {selectedTeam && (
+        <TeamStatsPanel
+          team={selectedTeam}
+          onClose={() => setSelectedTeam(null)}
+        />
+      )}
 
-          {/* Left: games column — capped at ~42rem so it stays readable */}
-          <div className="w-full lg:max-w-[42rem] min-w-0">
+      {/* Content */}
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        <div className="w-full min-w-0">
             {!lastRefresh && loading ? (
               <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
             ) : error && currentGames.length === 0 ? (
@@ -1314,7 +1434,7 @@ export default function App() {
               </div>
             ) : (
               <>
-                <BestLiveCard bestLive={bestLive} />
+                <BestLiveCard bestLive={bestLive} onTuneIn={handleTuneIn} />
                 {!bestLive && <BestBetCard bestBet={bestBet} />}
 
                 {currentGames.length === 0 ? (
@@ -1334,22 +1454,11 @@ export default function App() {
                     myTeams={myTeams}
                     onToggleMyTeam={toggleMyTeam}
                     onSelectTeam={setSelectedTeam}
+                    focusedGameId={focusedGameId}
                   />
                 )}
               </>
             )}
-          </div>
-
-          {/* Right: team stats panel — sticky below the header */}
-          {selectedTeam && (
-            <div className="w-full lg:w-80 shrink-0 lg:sticky lg:top-[80px]">
-              <TeamStatsPanel
-                team={selectedTeam}
-                onClose={() => setSelectedTeam(null)}
-              />
-            </div>
-          )}
-
         </div>
       </div>
     </div>
