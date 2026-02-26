@@ -6,11 +6,11 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 const REFRESH_INTERVAL = 30_000;
 
 const LEAGUE_SLUGS = {
-  NBA: "nba",
-  NFL: "nfl",
-  NHL: "nhl",
-  MLS: "mls",
-  "Champions League": "ucl",
+  "🏀 NBA": "nba",
+  "🏈 NFL": "nfl",
+  "🏒 NHL": "nhl",
+  "⚽️ MLS": "mls",
+  "⚽️ Champions League": "ucl",
 };
 const LEAGUES = Object.keys(LEAGUE_SLUGS);
 
