@@ -46,16 +46,12 @@ function edgeLabel(pct) {
 // Looks at ALL games across ALL leagues and finds the single most compelling
 // upcoming game based on win probability skew.
 //
-// A "best bet" is a game where:
-//   - It hasn't started yet (status === "scheduled")
-//   - We have win probability data
-//   - The favorite has the highest probability gap over the underdog
-//
-// We return the game + which league it belongs to so we can label it.
+// First tries win_probability data; falls back to spread size if none available.
 function findBestBet(allGames) {
   let best = null;
-  let bestSkew = 0; // "skew" = how lopsided the odds are
+  let bestSkew = 0;
 
+  // First pass: prefer games with win_probability data
   for (const [league, games] of Object.entries(allGames)) {
     for (const game of games) {
       if (game.status !== "scheduled" || !game.win_probability) continue;
@@ -63,7 +59,7 @@ function findBestBet(allGames) {
       const { home, away, win_probability } = game;
       const homePct = win_probability[home] ?? 50;
       const awayPct = win_probability[away] ?? 50;
-      const skew = Math.abs(homePct - awayPct); // bigger = more lopsided
+      const skew = Math.abs(homePct - awayPct);
 
       if (skew > bestSkew) {
         bestSkew = skew;
@@ -71,6 +67,23 @@ function findBestBet(allGames) {
       }
     }
   }
+
+  // Second pass: if no win_probability data, fall back to spread size
+  if (!best) {
+    let bestSpreadVal = 0;
+    for (const [league, games] of Object.entries(allGames)) {
+      for (const game of games) {
+        if (game.status !== "scheduled" || !game.spread?.favorite) continue;
+        const match = game.spread.favorite.match(/-?\d+\.?\d*/);
+        const spreadVal = match ? Math.abs(parseFloat(match[0])) : 0;
+        if (spreadVal > bestSpreadVal) {
+          bestSpreadVal = spreadVal;
+          best = { game, league, favPct: null };
+        }
+      }
+    }
+  }
+
   return best;
 }
 
@@ -528,15 +541,23 @@ function BestBetCard({ bestBet }) {
   if (!bestBet) return null;
   const { game, league, favPct } = bestBet;
   const { home, away, teams, win_probability, spread, start_time } = game;
-  const favAbbr = win_probability[home] >= win_probability[away] ? home : away;
-  const undAbbr = favAbbr === home ? away : home;
+
+  // Determine the favorite from win_probability, spread string, or default to home
+  let favAbbr;
+  if (win_probability) {
+    favAbbr = (win_probability[home] ?? 0) >= (win_probability[away] ?? 0) ? home : away;
+  } else if (spread?.favorite) {
+    const s = spread.favorite.toUpperCase();
+    favAbbr = s.includes(home.toUpperCase()) ? home : s.includes(away.toUpperCase()) ? away : home;
+  } else {
+    favAbbr = home;
+  }
 
   return (
     <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-5 mb-6 text-white shadow-lg">
       {/* Header row */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          {/* The ⭐ badge — this is what makes users notice it immediately */}
           <span className="bg-yellow-400 text-gray-900 text-xs font-extrabold px-2 py-0.5 rounded-full tracking-wide">
             ⭐ BEST BET
           </span>
@@ -560,17 +581,30 @@ function BestBetCard({ bestBet }) {
 
       {/* Why it's the best bet */}
       <div className="bg-white/10 rounded-xl px-4 py-3 text-sm">
-        <span className="text-yellow-300 font-bold">{teams[favAbbr]?.name ?? favAbbr}</span>
-        {" "}is favored at{" "}
-        <span className={`font-bold ${probTextClass(favPct)}`}>{favPct.toFixed(0)}%</span>
-        {" "}win probability
-        {spread && <> with a spread of <span className="font-bold text-white">{spread.favorite}</span></>}.
-        {" "}
-        <span className="text-gray-300">
-          {favPct >= 75
-            ? "This is one of today's clearest data edges."
-            : "Stats lean this way — worth watching closely."}
-        </span>
+        {favPct !== null ? (
+          <>
+            <span className="text-yellow-300 font-bold">{teams[favAbbr]?.name ?? favAbbr}</span>
+            {" "}is favored at{" "}
+            <span className={`font-bold ${probTextClass(favPct)}`}>{favPct.toFixed(0)}%</span>
+            {" "}win probability
+            {spread && <> with a spread of <span className="font-bold text-white">{spread.favorite}</span></>}.
+            {" "}
+            <span className="text-gray-300">
+              {favPct >= 75
+                ? "This is one of today's clearest data edges."
+                : "Stats lean this way — worth watching closely."}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="text-yellow-300 font-bold">{teams[favAbbr]?.name ?? favAbbr}</span>
+            {" "}is the listed favorite
+            {spread?.favorite && <> at <span className="font-bold text-white">{spread.favorite}</span></>}
+            {spread?.overUnder && <>, O/U <span className="font-bold text-white">{spread.overUnder}</span></>}.
+            {" "}
+            <span className="text-gray-300">Best available matchup today.</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -767,18 +801,20 @@ function FavoritesSection({ games, favoriteIds, onToggleFavorite, scoreHistory, 
       <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">
         ★ Your Favorites
       </div>
-      {favGames.map(g => (
-        <GameCard
-          key={g.id}
-          game={g}
-          isFavorited={true}
-          onToggleFavorite={onToggleFavorite}
-          scoreHistory={scoreHistory}
-          defaultExpanded={defaultExpanded}
-          myTeams={myTeams}
-          onToggleMyTeam={onToggleMyTeam}
-        />
-      ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+        {favGames.map(g => (
+          <GameCard
+            key={g.id}
+            game={g}
+            isFavorited={true}
+            onToggleFavorite={onToggleFavorite}
+            scoreHistory={scoreHistory}
+            defaultExpanded={defaultExpanded}
+            myTeams={myTeams}
+            onToggleMyTeam={onToggleMyTeam}
+          />
+        ))}
+      </div>
       <div className="border-t border-gray-200 mb-4" />
     </div>
   );
@@ -882,20 +918,22 @@ function LeagueSection({ games, favoriteIds, onToggleFavorite, scoreHistory, exp
       )}
 
       {/* Games for active day */}
-      {activeDayGames
-        .filter(g => !favoriteIds.has(g.id))
-        .map(g => (
-          <GameCard
-            key={g.id}
-            game={g}
-            isFavorited={false}
-            onToggleFavorite={onToggleFavorite}
-            scoreHistory={scoreHistory}
-            defaultExpanded={expandDefault}
-            myTeams={myTeams}
-            onToggleMyTeam={onToggleMyTeam}
-          />
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+        {activeDayGames
+          .filter(g => !favoriteIds.has(g.id))
+          .map(g => (
+            <GameCard
+              key={g.id}
+              game={g}
+              isFavorited={false}
+              onToggleFavorite={onToggleFavorite}
+              scoreHistory={scoreHistory}
+              defaultExpanded={expandDefault}
+              myTeams={myTeams}
+              onToggleMyTeam={onToggleMyTeam}
+            />
+          ))}
+      </div>
     </div>
   );
 }
@@ -1125,7 +1163,7 @@ export default function App() {
       </div>
 
       {/* Content */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="max-w-5xl mx-auto px-4 py-6">
         {!lastRefresh && loading ? (
           <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
         ) : error && currentGames.length === 0 ? (
