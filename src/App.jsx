@@ -1397,10 +1397,10 @@ export default function App() {
 
       {/* Content — two-column when a team panel is open */}
       <div className="px-4 py-6">
-        <div className={`${selectedTeam ? "flex gap-5 justify-center items-start" : "max-w-2xl mx-auto"}`}>
+        <div className="flex gap-5 justify-center items-start">
 
-          {/* Game list — stays max-w-2xl (42rem) regardless of panel state */}
-          <div className={selectedTeam ? "w-[42rem] shrink-0 min-w-0" : "w-full"}>
+          {/* Game list — width animates smoothly between centered-full and fixed 42rem */}
+          <div className={`transition-all duration-300 ease-out shrink-0 min-w-0 ${selectedTeam ? "w-[42rem]" : "w-full max-w-2xl"}`}>
             {!lastRefresh && loading ? (
               <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
             ) : error && currentGames.length === 0 ? (
