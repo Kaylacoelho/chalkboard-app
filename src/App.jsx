@@ -1744,19 +1744,23 @@ export default function App() {
                     <button
                       key={group.id}
                       onClick={() => { if (!isGroupActive) setActiveTab(group.leagues[0].slug); }}
-                    className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
-                      ${isGroupActive
-                        ? `font-bold ${c.activeText} ${c.activeBorder}`
-                        : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
-                  >
-                    {group.label}
-                    {hasMultiple && <span className={`text-xs ${isGroupActive ? c.activeText : "text-gray-400"}`}>▾</span>}
-                    {groupLiveCount > 0 && (
-                      <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{groupLiveCount}</span>
-                    )}
-                  </button>
-                );
-              })}
+                      className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
+                        ${isGroupActive
+                          ? `font-bold ${c.activeText} ${c.activeBorder}`
+                          : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
+                    >
+                      {group.label}
+                      {hasMultiple && <span className={`text-xs ${isGroupActive ? c.activeText : "text-gray-400"}`}>▾</span>}
+                      {groupLiveCount > 0 && (
+                        <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{groupLiveCount}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="text-[11px] text-gray-400 whitespace-nowrap ml-4">
+                Win probabilities are model outputs, not betting advice. Gamble responsibly.
+              </span>
             </div>
             {/* Row 2: sub-leagues (only when a sport group with multiple leagues is active) */}
             {activeSportGroup && activeSportGroup.leagues.length > 1 && (() => {
