@@ -734,14 +734,19 @@ function TeamStatsPanel({ team, onClose }) {
   const logo = data?.logo ?? team.logo;
   const statKeys = SEASON_STAT_DISPLAY[team.sport] ?? [];
   const statRows = data?.seasonStats
-    ? statKeys.filter(k => data.seasonStats[k]).map(k => data.seasonStats[k])
+    ? (() => {
+        const configured = statKeys.filter(k => data.seasonStats[k]).map(k => data.seasonStats[k]);
+        return configured.length > 0
+          ? configured
+          : Object.values(data.seasonStats).slice(0, 8); // fallback: show whatever ESPN returned
+      })()
     : [];
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 sticky top-4 overflow-hidden">
+    <div className="bg-white h-full flex flex-col overflow-hidden">
 
-      {/* Header — same minimal style as card status row */}
-      <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-gray-100">
+      {/* Header */}
+      <div className="px-4 pt-5 pb-3 flex items-center gap-3 border-b border-gray-100 shrink-0">
         {logo
           ? <img src={logo} alt="" className="w-9 h-9 object-contain shrink-0" />
           : <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">{team.abbr}</div>
@@ -758,8 +763,8 @@ function TeamStatsPanel({ team, onClose }) {
         >×</button>
       </div>
 
-      {/* Body — scrollable, divided like ExpandedSection */}
-      <div className="overflow-y-auto max-h-[calc(100vh-10rem)] divide-y divide-gray-100">
+      {/* Body — scrollable */}
+      <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
         {loading ? (
           <div className="px-4 py-10 text-center text-xs text-gray-400">Loading…</div>
         ) : !data || data.error ? (
@@ -833,7 +838,9 @@ function TeamStatsPanel({ team, onClose }) {
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0
                         ${g.result === "W" ? "bg-green-500" : g.result === "L" ? "bg-red-400" : "bg-gray-400"}`}
                       >{g.result}</div>
-                      <div className="text-[10px] tabular-nums text-gray-400 leading-none">{g.teamScore}–{g.oppScore}</div>
+                      {g.teamScore != null && g.oppScore != null && (
+                        <div className="text-[10px] tabular-nums text-gray-400 leading-none">{g.teamScore}–{g.oppScore}</div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -847,7 +854,9 @@ function TeamStatsPanel({ team, onClose }) {
                         </span>
                         <span className="text-gray-400 shrink-0 w-4">{g.isHome ? "vs" : "@"}</span>
                         <span className="font-medium text-gray-800 flex-1 truncate">{g.opponent}</span>
-                        <span className="tabular-nums text-gray-500 shrink-0">{g.teamScore}–{g.oppScore}</span>
+                        {g.teamScore != null && g.oppScore != null && (
+                          <span className="tabular-nums text-gray-500 shrink-0">{g.teamScore}–{g.oppScore}</span>
+                        )}
                         <span className="text-gray-300 shrink-0 w-12 text-right">{dateStr}</span>
                       </div>
                     );
@@ -1421,8 +1430,21 @@ export default function App() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 flex overflow-x-auto px-3">
+      {/* Mobile tab picker — shown only on small screens */}
+      <div className="sm:hidden bg-white border-b border-gray-200 px-4 py-2.5">
+        <select
+          value={activeTab}
+          onChange={e => setActiveTab(e.target.value)}
+          className="w-full text-sm font-semibold bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-gray-800 appearance-none"
+        >
+          <option value="🔥">🔥 Today</option>
+          {myTeams.size > 0 && <option value="★">★ Following</option>}
+          {LEAGUES.map(l => <option key={l} value={l}>{l}</option>)}
+        </select>
+      </div>
+
+      {/* Desktop tab bar — hidden on small screens */}
+      <div className="hidden sm:flex bg-white border-b border-gray-200 overflow-x-auto px-3">
         {/* 🔥 Today tab — always first */}
         {(() => {
           const totalLive = Object.values(allGames).flat().filter(g => g.status === "in_progress").length;
