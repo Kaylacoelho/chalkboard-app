@@ -582,7 +582,7 @@ function BestBetCard({ bestBet }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="bg-yellow-400 text-gray-900 text-xs font-extrabold px-2 py-0.5 rounded-full tracking-wide">
-            ⭐ BEST BET
+            🔥 BEST BET
           </span>
           <span className="text-gray-400 text-xs">{league}</span>
         </div>
@@ -748,14 +748,14 @@ function TeamStatsPanel({ team, onClose }) {
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
                   Last {data.recentGames.length} games
                 </div>
-                <div className="flex gap-1.5 flex-wrap mb-2.5">
+                <div className="flex gap-2 flex-wrap mb-2.5">
                   {data.recentGames.map((g, i) => (
-                    <div
-                      key={i}
-                      title={`${g.isHome ? "vs" : "@"} ${g.opponent} ${g.teamScore}-${g.oppScore}`}
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0
+                    <div key={i} className="flex flex-col items-center gap-0.5" title={`${g.isHome ? "vs" : "@"} ${g.opponent}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0
                         ${g.result === "W" ? "bg-green-500" : g.result === "L" ? "bg-red-400" : "bg-gray-400"}`}
-                    >{g.result}</div>
+                      >{g.result}</div>
+                      <div className="text-[10px] tabular-nums text-gray-400 leading-none">{g.teamScore}–{g.oppScore}</div>
+                    </div>
                   ))}
                 </div>
                 <div className="space-y-1.5">
@@ -1440,15 +1440,15 @@ export default function App() {
             )}
           </div>
 
-          {/* Team stats panel — inline right column */}
-          {selectedTeam && (
-            <div className="w-[27rem] shrink-0">
+          {/* Team stats panel — inline right column, animates in/out */}
+          <div className={`shrink-0 overflow-hidden transition-all duration-300 ease-out ${selectedTeam ? "w-[27rem] opacity-100" : "w-0 opacity-0"}`}>
+            {selectedTeam && (
               <TeamStatsPanel
                 team={selectedTeam}
                 onClose={() => setSelectedTeam(null)}
               />
-            </div>
-          )}
+            )}
+          </div>
 
         </div>
       </div>
