@@ -1396,11 +1396,11 @@ export default function App() {
       </div>
 
       {/* Content — two-column when a team panel is open */}
-      <div className={`${selectedTeam ? "max-w-5xl" : "max-w-2xl"} mx-auto px-4 py-6 transition-all`}>
-        <div className={`${selectedTeam ? "flex gap-5 items-start" : ""}`}>
+      <div className="px-4 py-6">
+        <div className={`${selectedTeam ? "flex gap-5 justify-center items-start" : "max-w-2xl mx-auto"}`}>
 
-          {/* Game list */}
-          <div className="flex-1 min-w-0">
+          {/* Game list — stays max-w-2xl (42rem) regardless of panel state */}
+          <div className={selectedTeam ? "w-[42rem] shrink-0 min-w-0" : "w-full"}>
             {!lastRefresh && loading ? (
               <div className="text-center py-16 text-gray-400">Connecting to ChalkBoard server...</div>
             ) : error && currentGames.length === 0 ? (
@@ -1442,7 +1442,7 @@ export default function App() {
 
           {/* Team stats panel — inline right column */}
           {selectedTeam && (
-            <div className="w-72 shrink-0">
+            <div className="w-[27rem] shrink-0">
               <TeamStatsPanel
                 team={selectedTeam}
                 onClose={() => setSelectedTeam(null)}
