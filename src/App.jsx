@@ -742,7 +742,11 @@ function TeamStatsPanel({ team, onClose }) {
       })()
     : [];
 
-  const bgColor = data?.color ? `#${data.color}` : "#111827";
+  // Use color from team API data, fall back to color from scoreboard data (available immediately),
+  // then fall back to dark. ESPN returns hex without #, but guard against both formats.
+  const rawColor = data?.color ?? team.color;
+  let bgColor = "#111827";
+  if (rawColor) bgColor = rawColor.startsWith("#") ? rawColor : `#${rawColor}`;
 
   return (
     <div className="bg-white h-full flex flex-col overflow-hidden">
@@ -991,7 +995,7 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
           {/* Away team */}
           <div className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3">
             <button
-              onClick={(e) => { e.stopPropagation(); onSelectTeam?.({ abbr: away, id: awayTeam?.id, name: awayTeam?.name ?? away, logo: awayTeam?.logo ?? null, sport: game.sport }); }}
+              onClick={(e) => { e.stopPropagation(); onSelectTeam?.({ abbr: away, id: awayTeam?.id, name: awayTeam?.name ?? away, logo: awayTeam?.logo ?? null, color: awayTeam?.color ?? null, sport: game.sport }); }}
               className="shrink-0 hover:scale-110 active:scale-95 transition-transform"
             >
               {awayTeam?.logo
@@ -1053,7 +1057,7 @@ function GameCard({ game, isFavorited, onToggleFavorite, scoreHistory, defaultEx
               </div>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); onSelectTeam?.({ abbr: home, id: homeTeam?.id, name: homeTeam?.name ?? home, logo: homeTeam?.logo ?? null, sport: game.sport }); }}
+              onClick={(e) => { e.stopPropagation(); onSelectTeam?.({ abbr: home, id: homeTeam?.id, name: homeTeam?.name ?? home, logo: homeTeam?.logo ?? null, color: homeTeam?.color ?? null, sport: game.sport }); }}
               className="shrink-0 hover:scale-110 active:scale-95 transition-transform"
             >
               {homeTeam?.logo
