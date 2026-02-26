@@ -5,6 +5,60 @@ import { useState, useEffect, useCallback, useRef } from "react";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 const REFRESH_INTERVAL = 30_000;
 
+// Per-sport Tailwind color tokens (fully written-out class strings for JIT safety)
+const SPORT_COLORS = {
+  basketball: {
+    activeBorder:  "border-orange-400",
+    activeText:    "text-orange-600",
+    subBg:         "bg-orange-50",
+    subBorder:     "border-orange-100",
+    activePill:    "bg-orange-500 text-white",
+    hoverPill:     "hover:bg-orange-100 hover:text-orange-700",
+    headerBg:      "bg-orange-50",
+    headerText:    "text-orange-500",
+  },
+  football: {
+    activeBorder:  "border-green-500",
+    activeText:    "text-green-700",
+    subBg:         "bg-green-50",
+    subBorder:     "border-green-100",
+    activePill:    "bg-green-600 text-white",
+    hoverPill:     "hover:bg-green-100 hover:text-green-700",
+    headerBg:      "bg-green-50",
+    headerText:    "text-green-600",
+  },
+  hockey: {
+    activeBorder:  "border-sky-400",
+    activeText:    "text-sky-600",
+    subBg:         "bg-sky-50",
+    subBorder:     "border-sky-100",
+    activePill:    "bg-sky-500 text-white",
+    hoverPill:     "hover:bg-sky-100 hover:text-sky-700",
+    headerBg:      "bg-sky-50",
+    headerText:    "text-sky-500",
+  },
+  baseball: {
+    activeBorder:  "border-rose-400",
+    activeText:    "text-rose-600",
+    subBg:         "bg-rose-50",
+    subBorder:     "border-rose-100",
+    activePill:    "bg-rose-500 text-white",
+    hoverPill:     "hover:bg-rose-100 hover:text-rose-700",
+    headerBg:      "bg-rose-50",
+    headerText:    "text-rose-500",
+  },
+  soccer: {
+    activeBorder:  "border-emerald-500",
+    activeText:    "text-emerald-700",
+    subBg:         "bg-emerald-50",
+    subBorder:     "border-emerald-100",
+    activePill:    "bg-emerald-600 text-white",
+    hoverPill:     "hover:bg-emerald-100 hover:text-emerald-700",
+    headerBg:      "bg-emerald-50",
+    headerText:    "text-emerald-600",
+  },
+};
+
 // Sport groups define the two-level navigation hierarchy.
 // Each group has a sport label and an ordered list of league slugs with display names.
 const SPORT_GROUPS = [
@@ -1410,11 +1464,12 @@ function MobileTabPicker({ activeTab, onSetTab, myTeams, allGames, followingGame
               const groupLiveCount = group.leagues.reduce(
                 (sum, l) => sum + (allGames[l.slug] ?? []).filter(g => g.status === "in_progress").length, 0
               );
+              const c = SPORT_COLORS[group.id];
               return (
                 <div key={group.id}>
                   {/* Group header — not tappable, just a label */}
-                  <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-100">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{group.label}</span>
+                  <div className={`flex items-center justify-between px-4 py-2 border-b ${c.headerBg} ${c.subBorder}`}>
+                    <span className={`text-xs font-bold uppercase tracking-wider ${c.headerText}`}>{group.label}</span>
                     {groupLiveCount > 0 && (
                       <span className="bg-red-100 text-red-600 text-xs font-bold px-1.5 py-px rounded-full leading-none">{groupLiveCount}</span>
                     )}
@@ -1683,17 +1738,18 @@ export default function App() {
                   (sum, l) => sum + (allGames[l.slug] ?? []).filter(g => g.status === "in_progress").length, 0
                 );
                 const hasMultiple = group.leagues.length > 1;
+                const c = SPORT_COLORS[group.id];
                 return (
                   <button
                     key={group.id}
                     onClick={() => { if (!isGroupActive) setActiveTab(group.leagues[0].slug); }}
                     className={`flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors
                       ${isGroupActive
-                        ? "font-bold text-gray-900 border-gray-900"
+                        ? `font-bold ${c.activeText} ${c.activeBorder}`
                         : "font-medium text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"}`}
                   >
                     {group.label}
-                    {hasMultiple && <span className="text-gray-400 text-xs">▾</span>}
+                    {hasMultiple && <span className={`text-xs ${isGroupActive ? c.activeText : "text-gray-400"}`}>▾</span>}
                     {groupLiveCount > 0 && (
                       <span className="bg-red-600 text-white text-xs font-bold px-1.5 py-px rounded-full leading-none">{groupLiveCount}</span>
                     )}
@@ -1702,34 +1758,35 @@ export default function App() {
               })}
             </div>
             {/* Row 2: sub-leagues (only when a sport group with multiple leagues is active) */}
-            {activeSportGroup && activeSportGroup.leagues.length > 1 && (
-              <div className="flex overflow-x-auto px-4 py-1.5 gap-1 bg-gray-50 border-t border-gray-100">
-                {activeSportGroup.leagues.map(league => {
-                  const isActive = activeTab === league.slug;
-                  const liveCount = (allGames[league.slug] ?? []).filter(g => g.status === "in_progress").length;
-                  const tenseCount = (allGames[league.slug] ?? []).filter(g => isTenseMoment(g)).length;
-                  return (
-                    <button
-                      key={league.slug}
-                      onClick={() => setActiveTab(league.slug)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors
-                        ${isActive
-                          ? "bg-gray-900 text-white"
-                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"}`}
-                    >
-                      {league.label}
-                      {tenseCount > 0 && <span className="text-orange-400 animate-pulse">⚡</span>}
-                      {liveCount > 0 && (
-                        <span className={`text-xs font-bold px-1.5 py-px rounded-full leading-none
-                          ${isActive ? "bg-red-500 text-white" : "bg-red-100 text-red-600"}`}>
-                          {liveCount}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {activeSportGroup && activeSportGroup.leagues.length > 1 && (() => {
+              const c = SPORT_COLORS[activeSportGroup.id];
+              return (
+                <div className={`flex overflow-x-auto px-4 py-1.5 gap-1 border-t ${c.subBg} ${c.subBorder}`}>
+                  {activeSportGroup.leagues.map(league => {
+                    const isActive = activeTab === league.slug;
+                    const liveCount = (allGames[league.slug] ?? []).filter(g => g.status === "in_progress").length;
+                    const tenseCount = (allGames[league.slug] ?? []).filter(g => isTenseMoment(g)).length;
+                    return (
+                      <button
+                        key={league.slug}
+                        onClick={() => setActiveTab(league.slug)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors
+                          ${isActive ? c.activePill : `text-gray-500 ${c.hoverPill}`}`}
+                      >
+                        {league.label}
+                        {tenseCount > 0 && <span className="text-orange-400 animate-pulse">⚡</span>}
+                        {liveCount > 0 && (
+                          <span className={`text-xs font-bold px-1.5 py-px rounded-full leading-none
+                            ${isActive ? "bg-white/30 text-white" : "bg-red-100 text-red-600"}`}>
+                            {liveCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
